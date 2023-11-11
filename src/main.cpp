@@ -194,7 +194,7 @@ void loop()
   cvA.readVoltage();
   cvB.readVoltage();
   ctrl.readVoltage();
-  voltagesExpander.outputVoltage(static_cast<float>(255));
+  voltagesExpander.outputVoltage(static_cast<float>(0));
 
   uint16_t val[16];
   for (int channel = 0 ; channel < NUM_FADERS; channel++)

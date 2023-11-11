@@ -43,7 +43,7 @@ const uint8_t regMap[] = {3, 7, 5, 4, 1, 6, 0, 2, 9, 8, 11, 10, 13, 12, 15, 14};
 
 const uint8_t ENC_SENSITIVITY       (1);
 const bool    ENC_ACTIVE_LOW        (1);
-const uint8_t ENC_STEPS_PER_NOTCH   (2);
+const uint8_t ENC_STEPS_PER_NOTCH   (4);
 
 const uint8_t NUM_GATES_IN          (2);
 const uint8_t GATE_PIN[NUM_GATES_IN]{CLOCK_IN, RESET_IN};
