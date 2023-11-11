@@ -1,20 +1,5 @@
-#include <FastShiftOut.h>
-// https://github.com/RobTillaart/FastShiftOut
 
-
-#include <bitHelpers.h>
-// https://github.com/RobTillaart/bitHelpers
-
-const uint8_t CLK_IN(2);
-const uint8_t RST_IN(3);
-const uint8_t CHAOS_IN(A2);
-
-// 74HC595 Control
-const uint8_t SR_CK(5);
-const uint8_t SR_LT(6);
-const uint8_t SR_DS(7);
-
-FastShiftOut FSO(SR_DS, SR_CK, MSBFIRST);
+#include <Arduino.h>
 
 uint8_t  BCDtoDEC(0);    // CD4028 BCD to Decimal decoder
 uint16_t counterONE(0);  // CHAOS CD4040 binary counter
@@ -47,7 +32,7 @@ void allTheseVoltages()
   }
 
   float Q_D(1.0f - Q_not [3]);
-  
+
   DAC_ONE += Q_D       * ((5.0f * 33.0f) / 100.0f);
   DAC_ONE += Q_not [0] * ((5.0f * 33.0f) / 200.0f);
   DAC_ONE += Q_not [1] * ((5.0f * 33.0f) / 300.0f);
@@ -58,7 +43,7 @@ void allTheseVoltages()
 
   float diffMinusIN(DAC_ONE);
   float diffPlusIN(DAC_TWO);
-  
+
   float CV_THREE(0.0f);
   float CV_FOUR(0.0f);
 
@@ -79,24 +64,13 @@ void allTheseVoltages()
 }
 
 
-void setup()
-{
-  pinMode(CLK_IN, INPUT_PULLUP);
-  pinMode(RST_IN, INPUT_PULLUP);
-  pinMode(SR_CK, OUTPUT);
-  pinMode(SR_LT, OUTPUT);
-  pinMode(SR_DS, OUTPUT);
-  
-  randomSeed(analogRead(A0));
-}
-
 void loop()
-{  
+{
   // Output of DIFF AMP to CLOCK input first CD4040
 
   //Simulated stochastic
   //chaos[1] = (random(1023) >  1023 / 2);
-  
+
   //counterONE += (int)(chaos[1] && !chaos[0]);
   //chaos[0] = chaos[1];
 
@@ -112,12 +86,12 @@ void loop()
 
   //clk[1] = !digitalRead(CLK_IN);
   clk[1] = !(millis() % 180);  // RLR_DEBUG
-  
+
   // CLOCK IN to second CD4040
   if (clk[1] && !clk[0])
   {
     ++counterTWO;
-    
+
     // Q10 second CD4040 triggers its own RST
     counterTWO %= 1024;
 
@@ -136,10 +110,10 @@ void loop()
 
       bitWrite(BCDtoDEC, flipFlop & 7, 1);
     }
-     
+
     // CD4028 outputs Q0-Q7 to output gates G0-G7
     OUTPUT_XOR = 0 | BCDtoDEC;
-      
+
     // Q2-Q9 second CD4040 to output gates (XOR or AND) G0-G7
     OUTPUT_XOR ^= ((counterTWO >> 1) & 0x00ff);
 
@@ -147,12 +121,4 @@ void loop()
     allTheseVoltages();
   }
   clk[0] = clk[1];
-}
-
-
-void printPattern(byte pattBuf)
-{
-  digitalWrite(SR_LT, LOW);
-  FSO.write(pattBuf & 255);
-  digitalWrite(SR_LT, HIGH);
 }

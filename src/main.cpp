@@ -50,11 +50,19 @@ uint8_t BIT_REGISTER(0);    // Blue LEDs + DAC8080
 uint8_t FDR_REGISTER(0);    // Green Fader LEDs
 uint8_t TRG_REGISTER(0);    // Gate/Trigger outputs + yellow LEDs
 
-volatile bool newGate_FLAG [NUM_GATES_IN]{0, 0};
-volatile bool gateIn_VAL   [NUM_GATES_IN]{0, 0};
+uint8_t PATTERN_START       [8]{0, 0, 0, 0, 0, 0, 0, 0};
+uint8_t PATTERN_OFFSET      [8]{0, 0, 0, 0, 0, 0, 0, 0};
+uint8_t PATTERN_LENGTH      [8]{8, 8, 8, 8, 8, 8, 8, 8};
+uint8_t PROGRAM_COUNTER     [8]{0, 0, 0, 0, 0, 0, 0, 0};
+uint32_t GATE_PATTERN       [8]{0, 0, 0, 0, 0, 0, 0, 0};
+
+volatile bool newGate_FLAG  [NUM_GATES_IN]{0, 0};
+volatile bool gateIn_VAL    [NUM_GATES_IN]{0, 0};
 volatile long rightNOW_micros(0);
 
-uint8_t PROGRAM_COUNTER(0);
+const float NEVER_FLIP(3.12);
+const float ALWAYS_FLIP(0.26);
+
 
 bool count(0);
 uint8_t acc(0);
@@ -121,16 +129,31 @@ bool getReset()
     return 0;
   }
 
-  PROGRAM_COUNTER = 0;
+  for (uint8_t ch(0); ch < NUM_CHANNELS; ++ch)
+  {
+    PROGRAM_COUNTER[ch] = PATTERN_START[ch];
+  }
   return 1;
 }
 
 
 // Probability of returning true increases as "prob" approaches 255
-bool coinToss(uint8_t prob)
+bool coinToss(float prob, float max)
 {
-  return (rand() % 255 < prob);
+  if (prob >= NEVER_FLIP)
+  {
+    return true;
+  }
+
+  if (prob <= ALWAYS_FLIP)
+  {
+    return false;
+  }
+  float result(float(random(0, 3135)) / 1000);
+  bool heads(result < prob);
+  return heads;
 }
+
 
 // Spits out the binary representation of "val" to the serial monitor
 void printBits(uint8_t  val){
@@ -141,6 +164,7 @@ void printBits(uint16_t val){
   for (auto bit = 15; bit >= 0; --bit){ Serial.print(bitRead(val, bit) ? '1' : '0'); }
   Serial.println(' ');
 }
+
 
 void setup()
 {
@@ -187,13 +211,42 @@ void setup()
   triggers.clock();
 }
 
+
+void turingStep()
+{
+  bool writeBit(ButtonState :: Held == writeHigh.readAndFree());
+  bool clearBit(ButtonState :: Held == writeLow.readAndFree());
+
+  // TODO: weight LOOP CTRL and also read LOOP CV
+  // NOTE: might want caps on WRITE SWITCH so we don't bounce
+  if (writeBit)
+  {
+    Serial.println("WRITE_HI");
+  }
+  else if (clearBit)
+  {
+    Serial.println("WRITE_LO");
+  }
+
+  uint8_t flipIt(0);
+  for (uint8_t ch(0); ch < NUM_CHANNELS; ++ch)
+  {
+    bool res(coinToss(ctrl.readVoltage(), 3.13f));
+    // Serial.printf("CH %d: %s\n", ch, res ? "HEADS" : "TAILS");
+    bitWrite(flipIt, ch, res);
+  }
+  leds.setReg(~flipIt, 0);
+  leds.setReg(flipIt, 1);
+  leds.clock();
+}
+
+
 void loop()
 {
   getReset();
   getClock();
   cvA.readVoltage();
   cvB.readVoltage();
-  ctrl.readVoltage();
   voltagesExpander.outputVoltage(static_cast<float>(0));
 
   uint16_t val[16];
@@ -207,28 +260,30 @@ void loop()
   switch(evt)
   {
     case encEvnts :: Click:
-      triggers.setReg(~uint8_t(triggers.D()));
-      triggers.clock();
+      // triggers.setReg(~uint8_t(triggers.D()));
+      turingStep();
       break;
     case encEvnts :: DblClick:
-      leds.setReg(~uint8_t(leds.D() >> 8), 1);
-      leds.clock();
+      // leds.setReg(~uint8_t(leds.D() >> 8), 1);
+      // leds.clock();
       break;
     case encEvnts :: Left:
-      triggers.rotateRight(1);
-      triggers.clock();
-      break;
-    case encEvnts :: ShiftLeft:
+      leds.rotateRight(1, 0);
       leds.rotateRight(1, 1);
       leds.clock();
       break;
-    case encEvnts :: Right:
-      triggers.rotateRight(-1);
-      triggers.clock();
+    case encEvnts :: ShiftLeft:
+      // leds.rotateRight(1, 1);
+      // leds.clock();
       break;
-    case encEvnts :: ShiftRight:
+    case encEvnts :: Right:
+      leds.rotateRight(-1, 0);
       leds.rotateRight(-1, 1);
       leds.clock();
+      break;
+    case encEvnts :: ShiftRight:
+      // leds.rotateRight(-1, 1);
+      // leds.clock();
       break;
     case encEvnts :: Press:
       Serial.println("PRESS");
@@ -244,35 +299,35 @@ void loop()
       break;
   }
 
-  ButtonState lo(writeLow.readAndFree());
-  switch(lo)
-  {
-    case ButtonState :: Clicked:
-    case ButtonState :: ClickedAndHeld:
-      leds.rotateRight(-1, 0);
-      leds.clock();
-      break;
-    case ButtonState :: DoubleClicked:
-      Serial.println("DOWN DOWN");
-      break;
-    default:
-      break;
-  }
+  // ButtonState lo(writeLow.readAndFree());
+  // switch(lo)
+  // {
+  //   case ButtonState :: Clicked:
+  //   case ButtonState :: ClickedAndHeld:
+  //     leds.rotateRight(-1, 0);
+  //     leds.clock();
+  //     break;
+  //   case ButtonState :: DoubleClicked:
+  //     Serial.println("DOWN DOWN");
+  //     break;
+  //   default:
+  //     break;
+  // }
 
-  ButtonState hi(writeHigh.readAndFree());
-  switch(hi)
-  {
-    case ButtonState :: Clicked:
-    case ButtonState :: ClickedAndHeld:
-      leds.rotateRight(1, 0);
-      leds.clock();
-      break;
-    case ButtonState :: DoubleClicked:
-      Serial.println("UP UP");
-      break;
-    default:
-      break;
-  }
+  // ButtonState hi(writeHigh.readAndFree());
+  // switch(hi)
+  // {
+  //   case ButtonState :: Clicked:
+  //   case ButtonState :: ClickedAndHeld:
+  //     leds.rotateRight(1, 0);
+  //     leds.clock();
+  //     break;
+  //   case ButtonState :: DoubleClicked:
+  //     Serial.println("UP UP");
+  //     break;
+  //   default:
+  //     break;
+  // }
 
   // if (!count)
   // {

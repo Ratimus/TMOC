@@ -31,6 +31,7 @@ const uint8_t CV_IN_B       (39);
 
 const uint8_t NUM_CV_INS        (4);
 const uint8_t NUM_FADERS        (8);
+const uint8_t NUM_CHANNELS      (8);
 const uint8_t SAMPLE_BUFFER_SIZE(16);
 
 const uint8_t chSliders[] = {7, 6, 5, 4, 3, 2, 1, 0};

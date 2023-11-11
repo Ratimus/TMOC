@@ -29,10 +29,30 @@ HardwareCtrl* pFaders[] =
 void initADC()
 {
   adc0.begin(ADC0_CS); // Chip select pin.
+}
+
+
+void initADC_LOUD()
+{
+  adc0.begin(ADC0_CS); // Chip select pin.
   Serial.printf("adc0 initialized, CS = pin %d\n", ADC0_CS);
 }
 
+
 void initFaders()
+{
+  while (!pFaders[0]->isReady()) { pFaders[0]->service(); }
+  while (!pFaders[1]->isReady()) { pFaders[1]->service(); }
+  while (!pFaders[2]->isReady()) { pFaders[2]->service(); }
+  while (!pFaders[3]->isReady()) { pFaders[3]->service(); }
+  while (!pFaders[4]->isReady()) { pFaders[4]->service(); }
+  while (!pFaders[5]->isReady()) { pFaders[5]->service(); }
+  while (!pFaders[6]->isReady()) { pFaders[6]->service(); }
+  while (!pFaders[7]->isReady()) { pFaders[7]->service(); }
+}
+
+
+void initFadersLOUD()
 {
   Serial.println();
   Serial.println("ADC\tCHAN\tMAXVALUE");
