@@ -5,7 +5,6 @@
 #include <bitHelpers.h>
 #include <FastShiftOut.h>
 
-
 // enable
 // set
 // clock
@@ -14,6 +13,26 @@
 // reset
 // pending
 // preEnable
+
+/*
+  // setting all pins at the same time to either HIGH or LOW
+  sr.setAllHigh(); // set all pins HIGH
+  sr.setAllLow();  // set all pins LOW
+  sr.set(i, HIGH); // set single pin HIGH
+
+  // set all pins at once
+  uint8_t pinValues[] = { B10101010 };
+  sr.setAll(pinValues);
+
+  // read pin (zero based, i.e. 6th pin)
+  uint8_t stateOfPin5 = sr.get(5);
+  sr.set(6, stateOfPin5);
+
+  // set pins without immediate update
+  sr.setNoUpdate(0, HIGH);
+  sr.setNoUpdate(1, LOW);
+  sr.updateRegisters(); // update the pins to the set values
+  */
 
 template <typename T>
   class OutputRegister : public latchable<T>
@@ -26,7 +45,8 @@ public:
   LCH(csPin),
   MAP(mapping),
   BYTE_COUNT(sizeof(T)),
-  NUM_BITS(sizeof(T) * 8)
+  NUM_BITS(sizeof(T) * 8),
+  GATE_LENGTH(100)
   {
     SR = new FastShiftOut(DAT, CLK, LSBFIRST);
   }
@@ -42,7 +62,20 @@ public:
   {
     latchable<T> :: clock();
     writeOutputRegister();
+    onTime = millis();
     return Q();
+  }
+
+  void writeBit(uint8_t bitnum, bool val, uint8_t bytenum = 0)
+  {
+    uint8_t temp(getReg(bytenum));
+    bitWrite(temp, bitnum, val);
+    setReg(temp, bytenum);
+  }
+
+  uint8_t getReg(uint8_t bytenum = 0)
+  {
+    return (D() >> (8 * bytenum)) & 0xFF;
   }
 
   void setReg(uint8_t val, uint8_t bytenum = 0)
@@ -52,28 +85,6 @@ public:
     T temp(D() & ~mask);
     temp |= setVal;
     latchable<T> :: set(temp);
-  }
-
-  void rotateRight(int8_t amt = 1, uint8_t bytenum = 0)
-  {
-    uint8_t temp((D() >> (8 * bytenum)) & 0xFF);
-    if (amt < 0)
-    {
-      uint8_t absAmt(-amt % 8);
-      temp = ((uint16_t(temp) << absAmt) & 0xFF) | (temp >> (8 - absAmt));
-    }
-    else
-    {
-      amt %= 8;
-      if (amt > 0)
-      {
-        temp = (temp >> amt) | ((uint16_t(temp) << (8 - amt)) & 0xFF);
-      }
-    }
-    T tempT(D());
-    tempT &= ~(T(0xFF) << (8 * bytenum));
-    tempT |= T(temp) << (8 * bytenum);
-    latchable<T> :: set(tempT);
   }
 
   T Q()
@@ -86,6 +97,31 @@ public:
     return latchable<T> :: D;
   }
 
+  void allOff()
+  {
+    digitalWrite(LCH, LOW);
+    for (uint8_t bn(0); bn < BYTE_COUNT; ++bn)
+    {
+      SR->write(0);
+    }
+    digitalWrite(LCH, HIGH);
+  }
+
+  bool clockExpired()
+  {
+    if (!onTime)
+    {
+      return false;
+    }
+
+    if (millis() - onTime <= static_cast<u_long>(GATE_LENGTH))
+    {
+      return false;
+    }
+    onTime = 0;
+    return true;
+  }
+
 protected:
   const uint8_t CLK;
   const uint8_t DAT;
@@ -95,7 +131,7 @@ protected:
   const size_t BYTE_COUNT;
   FastShiftOut *SR;
 
-  void writeOutputRegister(void)
+  void writeOutputRegister()
   {
     memset(&REGISTER, 0, BYTE_COUNT);
     for (auto bitnum(0); bitnum < NUM_BITS; ++bitnum)
@@ -112,6 +148,8 @@ protected:
   }
 
   T REGISTER;
+  u_long onTime;
+  uint8_t GATE_LENGTH;
 };
 
 #endif

@@ -1,6 +1,38 @@
 
 #include <Arduino.h>
 
+
+
+
+float choas()
+{
+  static float x = 0.7;
+  static float y = 0;
+  static float z = 0;
+  static float h;
+
+  const float m0 = -1.143;
+  const float m1 = -0.714;
+  const float dt = 0.01;
+  const float alpha  = 15.6;
+  const int beta = 28;
+
+
+  float xdot = alpha*(y-x-h);
+  float ydot = x - y + z;
+  float zdot  = (-beta)*y;
+
+  h = (m1*x)+(0.5*(m0-m1))*(abs(x+1)-abs(x-1));
+
+  x = x + (xdot*dt);
+  y = y + (ydot*dt);
+  z = z + (zdot*dt);
+
+  float x_pos = 128+(50 * x);
+  float y_pos = 128+(50 * y);
+  return x_pos;
+}
+
 uint8_t  BCDtoDEC(0);    // CD4028 BCD to Decimal decoder
 uint16_t counterONE(0);  // CHAOS CD4040 binary counter
 uint16_t counterTWO(0);  // INPUT CD4040 binary counter

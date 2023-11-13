@@ -1,33 +1,15 @@
 #include <Arduino.h>
-// #include <pwmWrite.h>
 #include "TMOC_HW.h"
 #include "DacESP32.h"
 #include <CtrlPanel.h>
 #include <bitHelpers.h>
+#include <MagicButton.h>
 #include <ClickEncoder.h>
+#include "TuringRegister.h"
 #include <OutputRegister.h>
 #include <ESP32AnalogRead.h>
 #include <ClickEncoderInterface.h>
-
-/*
-  // setting all pins at the same time to either HIGH or LOW
-  sr.setAllHigh(); // set all pins HIGH
-  sr.setAllLow();  // set all pins LOW
-  sr.set(i, HIGH); // set single pin HIGH
-
-  // set all pins at once
-  uint8_t pinValues[] = { B10101010 };
-  sr.setAll(pinValues);
-
-  // read pin (zero based, i.e. 6th pin)
-  uint8_t stateOfPin5 = sr.get(5);
-  sr.set(6, stateOfPin5);
-
-  // set pins without immediate update
-  sr.setNoUpdate(0, HIGH);
-  sr.setNoUpdate(1, LOW);
-  sr.updateRegisters(); // update the pins to the set values
-  */
+#include "ESP32_New_TimerInterrupt.h"
 
 ClickEncoder encoder(ENC_A, ENC_B, ENC_SW, ENC_STEPS_PER_NOTCH, ENC_ACTIVE_LOW);
 ClickEncoderInterface encoderInterface(encoder, ENC_SENSITIVITY);
@@ -45,6 +27,7 @@ DacESP32 voltagesExpander(static_cast<gpio_num_t>(DAC1_CV_OUT));
 
 OutputRegister<uint8_t> triggers(SR_CLK, SR_DATA, TRIG_SR_CS, trgMap);
 OutputRegister<uint16_t> leds(SR_CLK, SR_DATA, LED_SR_CS, regMap);
+TuringRegister alan(&ctrl, &writeHigh, &writeLow);
 
 uint8_t BIT_REGISTER(0);    // Blue LEDs + DAC8080
 uint8_t FDR_REGISTER(0);    // Green Fader LEDs
@@ -58,19 +41,16 @@ uint32_t GATE_PATTERN       [8]{0, 0, 0, 0, 0, 0, 0, 0};
 
 volatile bool newGate_FLAG  [NUM_GATES_IN]{0, 0};
 volatile bool gateIn_VAL    [NUM_GATES_IN]{0, 0};
-volatile long rightNOW_micros(0);
+// volatile long rightNOW_micros(0);
+// uint8_t SEL_STEP(0);
 
 const float NEVER_FLIP(3.12);
 const float ALWAYS_FLIP(0.26);
 
 
-bool count(0);
-uint8_t acc(0);
-uint8_t acc2(0);
-bool FADERS_RUNNING(false);
-
 ////////////////////////////
 // ISR for Timer 1
+bool FADERS_RUNNING(false);
 void ICACHE_RAM_ATTR onTimer1()
 {
   for (uint8_t fd = 0; fd < 8; ++fd)
@@ -86,20 +66,21 @@ void ICACHE_RAM_ATTR onTimer1()
   for (uint8_t gate(0); gate < NUM_GATES_IN; ++gate)
   {
     bool val(!digitalRead(GATE_PIN[gate]));
-    if (val == gateIn_VAL[gate])
-    {
-      continue;
-    }
-    gateIn_VAL[gate] = val;
-    if (val)
+    if (val && !gateIn_VAL[gate])
     {
       newGate_FLAG[gate] = 1;
     }
+    gateIn_VAL[gate] = val;
+  }
+
+  if (triggers.clockExpired())
+  {
+    triggers.allOff();
   }
 }
 
 
-bool getGate(uint8_t gate)
+bool readFlag(uint8_t gate)
 {
   bool ret(0);
   cli();
@@ -112,46 +93,14 @@ bool getGate(uint8_t gate)
   return ret;
 }
 
-bool getClock()
+bool CLOCK()
 {
-  if (!getGate(0));
-  {
-    return 0;
-  }
-
-  return 1;
+  return readFlag(0);
 }
 
-bool getReset()
+bool RESET()
 {
-  if (!getGate(1))
-  {
-    return 0;
-  }
-
-  for (uint8_t ch(0); ch < NUM_CHANNELS; ++ch)
-  {
-    PROGRAM_COUNTER[ch] = PATTERN_START[ch];
-  }
-  return 1;
-}
-
-
-// Probability of returning true increases as "prob" approaches 255
-bool coinToss(float prob, float max)
-{
-  if (prob >= NEVER_FLIP)
-  {
-    return true;
-  }
-
-  if (prob <= ALWAYS_FLIP)
-  {
-    return false;
-  }
-  float result(float(random(0, 3135)) / 1000);
-  bool heads(result < prob);
-  return heads;
+  return readFlag(1);
 }
 
 
@@ -168,7 +117,6 @@ void printBits(uint16_t val){
 
 void setup()
 {
-  randomSeed(analogRead(UNUSED_ANALOG));
   Serial.begin(115200);
 
   pinMode(SR_CLK,           OUTPUT);
@@ -176,7 +124,6 @@ void setup()
   pinMode(LED_SR_CS,        OUTPUT);
   pinMode(TRIG_SR_CS,       OUTPUT);
   pinMode(DAC1_CV_OUT,      OUTPUT);
-
   for (uint8_t p(0); p < 4; ++p)
   {
     pinMode(PWM_OUT[p],     OUTPUT);
@@ -192,6 +139,9 @@ void setup()
   pinMode(CLOCK_IN,         INPUT_PULLUP);
   pinMode(RESET_IN,         INPUT_PULLUP);
 
+  triggers.setReg(0);
+  triggers.clock();
+
   initADC();
 
   timer1 = timerBegin(1, 80, true);
@@ -201,58 +151,69 @@ void setup()
   timerAlarmEnable(timer1);
 
   initFaders();
-  FADERS_RUNNING = true;
-  triggers.setReg(1);
-  leds.setReg(1, 0);
-  uint8_t temp(0xFF);
-  bitWrite(temp, 0, 0);
-  leds.setReg(1, 1);
+
+  randomSeed(analogRead(UNUSED_ANALOG));
+  alan.jam(random(1, 255) >> 8 | random(1, 255));
+  uint8_t initReg(alan.getOutput());
+  leds.setReg(~initReg, 0);
+  leds.setReg(initReg, 1);
   leds.clock();
-  triggers.clock();
+
+  FADERS_RUNNING = true;
 }
 
 
-void turingStep()
+void expandVoltages()
 {
-  bool writeBit(ButtonState :: Held == writeHigh.readAndFree());
-  bool clearBit(ButtonState :: Held == writeLow.readAndFree());
+  float sum(0);
+  for (int channel = 0 ; channel < NUM_FADERS; channel++)
+  {
+    if (!bitRead(BIT_REGISTER, channel))
+    {
+      continue;
+    }
+    sum += float(pFaders[chSliders[channel]]->read());
+  }
+  sum *= 3.134;
+  voltagesExpander.outputVoltage(sum / float(pADC0->maxValue()));
+}
 
-  // TODO: weight LOOP CTRL and also read LOOP CV
-  // NOTE: might want caps on WRITE SWITCH so we don't bounce
-  if (writeBit)
+
+void turingStep(int8_t steps)
+{
+  if (RESET())
   {
-    Serial.println("WRITE_HI");
+    BIT_REGISTER = BIT_REGISTER << PROGRAM_COUNTER[0] | BIT_REGISTER >> (15 - 8);
+    for (uint8_t ch(0); ch < NUM_CHANNELS; ++ch)
+    {
+      PROGRAM_COUNTER[ch] = PATTERN_START[ch];
+    }
+    alan.jam(BIT_REGISTER);
   }
-  else if (clearBit)
+  else
   {
-    Serial.println("WRITE_LO");
+    alan.iterate(steps);
   }
 
-  uint8_t flipIt(0);
-  for (uint8_t ch(0); ch < NUM_CHANNELS; ++ch)
-  {
-    bool res(coinToss(ctrl.readVoltage(), 3.13f));
-    // Serial.printf("CH %d: %s\n", ch, res ? "HEADS" : "TAILS");
-    bitWrite(flipIt, ch, res);
-  }
-  leds.setReg(~flipIt, 0);
-  leds.setReg(flipIt, 1);
+  TRG_REGISTER = alan.getOutput();
+  triggers.setReg(TRG_REGISTER);
+  triggers.clock();
+  expandVoltages();
+
+  BIT_REGISTER = TRG_REGISTER;
+  leds.setReg(BIT_REGISTER, 1);
+  FDR_REGISTER = ~BIT_REGISTER;
+  leds.setReg(FDR_REGISTER, 0);
   leds.clock();
 }
 
 
 void loop()
 {
-  getReset();
-  getClock();
-  cvA.readVoltage();
-  cvB.readVoltage();
-  voltagesExpander.outputVoltage(static_cast<float>(0));
-
-  uint16_t val[16];
-  for (int channel = 0 ; channel < NUM_FADERS; channel++)
+  if (CLOCK())
   {
-    val[channel] = pFaders[chSliders[channel]]->read();
+    turingStep(1);
+    Serial.println("clock");
   }
 
   // Check for new events from our encoder and clear the "ready" flag if there are
@@ -260,30 +221,18 @@ void loop()
   switch(evt)
   {
     case encEvnts :: Click:
-      // triggers.setReg(~uint8_t(triggers.D()));
-      turingStep();
       break;
     case encEvnts :: DblClick:
-      // leds.setReg(~uint8_t(leds.D() >> 8), 1);
-      // leds.clock();
       break;
     case encEvnts :: Left:
-      leds.rotateRight(1, 0);
-      leds.rotateRight(1, 1);
-      leds.clock();
+      turingStep(-1);
       break;
     case encEvnts :: ShiftLeft:
-      // leds.rotateRight(1, 1);
-      // leds.clock();
       break;
     case encEvnts :: Right:
-      leds.rotateRight(-1, 0);
-      leds.rotateRight(-1, 1);
-      leds.clock();
+      turingStep(1);
       break;
     case encEvnts :: ShiftRight:
-      // leds.rotateRight(-1, 1);
-      // leds.clock();
       break;
     case encEvnts :: Press:
       Serial.println("PRESS");
@@ -298,59 +247,4 @@ void loop()
     default:
       break;
   }
-
-  // ButtonState lo(writeLow.readAndFree());
-  // switch(lo)
-  // {
-  //   case ButtonState :: Clicked:
-  //   case ButtonState :: ClickedAndHeld:
-  //     leds.rotateRight(-1, 0);
-  //     leds.clock();
-  //     break;
-  //   case ButtonState :: DoubleClicked:
-  //     Serial.println("DOWN DOWN");
-  //     break;
-  //   default:
-  //     break;
-  // }
-
-  // ButtonState hi(writeHigh.readAndFree());
-  // switch(hi)
-  // {
-  //   case ButtonState :: Clicked:
-  //   case ButtonState :: ClickedAndHeld:
-  //     leds.rotateRight(1, 0);
-  //     leds.clock();
-  //     break;
-  //   case ButtonState :: DoubleClicked:
-  //     Serial.println("UP UP");
-  //     break;
-  //   default:
-  //     break;
-  // }
-
-  // if (!count)
-  // {
-  //   mapOutputRegister(acc, trgLeds, TRG_REGISTER);
-  // }
-  // else
-  // {
-  //   mapOutputRegister(~acc, trgLeds, TRG_REGISTER);
-  // }
-
-  // if (acc2 % 2)
-  // {
-  //   mapOutputRegister(~(1 << (acc % 8)), bitLeds, BIT_REGISTER);
-  //   mapOutputRegister(1 << (7 - (acc % 8)), fdrLeds, FDR_REGISTER);
-  // }
-  // else
-  // {
-  //   mapOutputRegister(1 << (acc % 8), bitLeds, BIT_REGISTER);
-  //   mapOutputRegister(1 << (acc % 8), fdrLeds, FDR_REGISTER);
-  // }
-
-  // digitalWrite(LED_SR_CS, LOW);
-  // leds.write(FDR_REGISTER);
-  // leds.write(BIT_REGISTER);
-  // digitalWrite(LED_SR_CS, HIGH);
 }
