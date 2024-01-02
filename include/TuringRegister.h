@@ -6,44 +6,26 @@
 #include <MagicButton.h>
 #include <ESP32AnalogRead.h>
 
+const uint8_t NUM_STEP_LENGTHS(13);
+const uint8_t STEP_LENGTH_VALS[NUM_STEP_LENGTHS]{2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 16};
 
-struct Casino
+struct Stochasticizer
 {
   float THRESH_LOW;
   float THRESH_HIGH;
 
   ESP32AnalogRead *pVolts;
-  MagicButton *pToggleUp;
-  MagicButton *pToggleDown;
-  bool togglesActive;
 
-  Casino(
-    ESP32AnalogRead * voltage,
-    MagicButton * wrHI,
-    MagicButton * wrLO):
-    pVolts(voltage),
-    pToggleUp(wrHI),
-    pToggleDown(wrLO),
-    togglesActive(false)
+  Stochasticizer(
+    ESP32AnalogRead * voltage):
+    THRESH_LOW(265.0),
+    THRESH_HIGH(3125.0),
+    pVolts(voltage)
+  { ; }
+
+  bool stochasticize(bool startVal)
   {
-    THRESH_LOW = 265.0;
-    THRESH_HIGH = 3125.0;
-  }
-
-  bool coinToss(bool startVal)
-  {
-    if (togglesActive && ButtonState :: Held == pToggleUp->readAndFree())
-    {
-      return true;
-    }
-
-    if (togglesActive && ButtonState :: Held == pToggleDown->readAndFree())
-    {
-      return false;
-    }
-
     float prob(pVolts->readMiliVolts());
-
     if (prob > THRESH_HIGH)
     {
       return startVal;
@@ -69,90 +51,238 @@ class TuringRegister
 {
 public:
   TuringRegister(
-    ESP32AnalogRead * voltage,
-    MagicButton * wrHI,
-    MagicButton * wrLO):
-    length(8),
-    programCounter(0),
-    startingStep(0),
-    offset(0),
-    shiftReg(0),
-    casino(Casino(voltage, wrHI, wrLO))
+    ESP32AnalogRead *voltage):
+    locked_         (0),
+    inReverse_      (0),
+    offset_         (0),
+    resetPending_   (0),
+    workingRegister (0),
+    stepCountIdx_   (6),
+    stoch_(Stochasticizer(voltage)),
+    NUM_PATTERNS    (8),
+    currentPattern_ (0),
+    nextPattern_    (0)
   {
-    ;
-  }
-
-  void setLength(uint8_t steps)
-  {
-    if (steps < 2 || steps > 32)
+    pLengthArray_ = new uint8_t [NUM_PATTERNS];
+    for (uint8_t bk(0); bk < NUM_PATTERNS; ++bk)
     {
-      return;
+      *(pLengthArray_ + bk) = STEP_LENGTH_VALS[stepCountIdx_];
     }
-    length = steps;
+    pLength_      = pLengthArray_;
+    pPatternBank  = new uint16_t [NUM_PATTERNS];
+    pShiftReg_    = pPatternBank;
+    workingRegister = *pShiftReg_;
   }
 
-  void iterate(int8_t steps = -1)
+  ~TuringRegister()
   {
-    uint8_t lastBitIndex(length - 1);
-    uint8_t readIndex;
-    uint8_t writeIndex;
+    delete [] pPatternBank;
+    pPatternBank = NULL;
+  }
+
+
+  // Shifts register, returns true on downbeat
+  bool iterate(int8_t steps)
+  {
+    if (currentPattern_ != nextPattern_)
+    {
+      changeBank_(nextPattern_);
+    }
+
+    if (resetPending_)
+    {
+      resetPending_ = false;
+      offset_       = steps;
+      return true;
+    }
+
     uint8_t leftAmt;
     uint8_t rightAmt;
-    bool nextBit;
+
+    int8_t  readIdx;
+    uint8_t writeIdx;
+
     if (steps > 0)  // Advance pattern
     {
-      readIndex = lastBitIndex;
-      writeIndex = 0;
-      leftAmt = 1;
-      rightAmt = 0;
+      leftAmt   = 1;
+      rightAmt  = 15;
+      readIdx   = *pLength_ - 1;
+      writeIdx  = 0;
     }
     else
     {
-      steps = -steps;
-      readIndex = 0;
-      writeIndex = lastBitIndex;
-      leftAmt = 0;
-      rightAmt = 1;
+      leftAmt   = 15;
+      rightAmt  = 1;
+      readIdx   = 8 - *pLength_;
+
+      if (readIdx < 0)
+      {
+        readIdx += 16;
+      }
+      writeIdx = 7;
     }
 
-    for (uint8_t st(0); st < steps; ++st)
+    bool writeVal(bitRead(workingRegister, readIdx));
+    if (!locked_)
     {
-      nextBit = bitRead(shiftReg, readIndex);
-      nextBit = casino.coinToss(nextBit);
-      if (leftAmt)
-      {
-        shiftReg = shiftReg << leftAmt;
-      }
-      else
-      {
-        shiftReg = shiftReg >> rightAmt;
-      }
-      bitWrite(shiftReg, writeIndex, nextBit);
+      writeVal = stoch_.stochasticize(writeVal);
+    }
+
+    workingRegister = (workingRegister << leftAmt) | (workingRegister >> rightAmt);
+    bitWrite(workingRegister, writeIdx, writeVal);
+
+    bool downBeat(offset_ == 0);
+
+    offset_ += steps;
+    if ((offset_ >= *pLength_) || (offset_ <= -*pLength_))
+    {
+      offset_ = 0;
+    }
+
+    return downBeat;
+  }
+
+  void reset()
+  {
+    if (offset_ > 0)
+    {
+      workingRegister = (workingRegister >> offset_) | (workingRegister << (16 - offset_));
+    }
+    else if (offset_ < 0)
+    {
+      workingRegister = (workingRegister << -offset_) | (workingRegister >> (16 + offset_));
+    }
+    resetPending_ = true;
+  }
+
+  void rotateToCurrentStep()
+  {
+    if (offset_ > 0)
+    {
+      workingRegister = (workingRegister << offset_) | (workingRegister >> (16 - offset_));
+    }
+    else if (offset_ < 0)
+    {
+      workingRegister = (workingRegister >> -offset_) | (workingRegister << (16 + offset_));
     }
   }
 
-  uint8_t getOutput()
+  void lengthPLUS()
   {
-    return pattern;
+    if (stepCountIdx_ == NUM_STEP_LENGTHS - 1)
+    {
+      return;
+    }
+    ++stepCountIdx_;
+    *pLength_ = STEP_LENGTH_VALS[stepCountIdx_];
   }
 
-  void jam(uint16_t jamVal)
+  void lengthMINUS()
   {
-    shiftReg = jamVal;
+    if (stepCountIdx_ == 0)
+    {
+      return;
+    }
+    --stepCountIdx_;
+    *pLength_ = STEP_LENGTH_VALS[stepCountIdx_];
   }
 
+
+  uint16_t getReg()
+  {
+    return *pShiftReg_;
+  }
+
+  uint8_t getOutput() { return (uint8_t)(workingRegister & 0xFF); }
+  uint8_t getLength() { return *pLength_; }
+  uint8_t getStep()
+  {
+    if (offset_ < 0)
+    {
+      return -offset_;
+    }
+    return offset_;
+  }
+
+  uint8_t setNextPattern(uint8_t bankNum)
+  {
+    bankNum %= NUM_PATTERNS;
+    nextPattern_ = bankNum;
+    return nextPattern_;
+  }
+
+  void preFill(uint16_t fillVal, uint8_t bankNum)
+  {
+    *(pPatternBank + bankNum) = fillVal;
+  }
+
+  void moveToPattern(uint8_t bankIdx)
+  {
+    // Rotate working register back to step 0 before storing it, but don't set the pending
+    // flag if it wasn't already
+    bool pr(resetPending_);
+    reset();
+    resetPending_ = pr;
+    *pShiftReg_   = workingRegister;
+
+    // Move pattern pointer to selected bank and copy it into working register
+    currentPattern_ = bankIdx % NUM_PATTERNS;
+    pShiftReg_      = pPatternBank + currentPattern_;
+    workingRegister = *pShiftReg_;
+
+    pLength_ = pLengthArray_ + currentPattern_;
+    offset_ %= *pLength_;
+    rotateToCurrentStep();
+  }
+
+  void overWritePattern(uint8_t bankIdx)
+  {
+    // Rotate working register to step 0
+    bool pr(resetPending_);
+    reset();
+    resetPending_ = pr;
+
+    // Move pattern pointer to the selected bank and copy working register into it
+    currentPattern_ = bankIdx % NUM_PATTERNS;
+    pShiftReg_      = pPatternBank + currentPattern_;
+    *(pLengthArray_ + currentPattern_) = *pLength_;
+    *pShiftReg_     = workingRegister;
+
+    pLength_        = pLengthArray_ + currentPattern_;
+    offset_ %= *pLength_;
+    rotateToCurrentStep();
+  }
 
 protected:
-  uint8_t length;
-  uint8_t programCounter;
-  uint8_t startingStep;
-  uint8_t offset;
-  union
+  bool            locked_;
+  bool            inReverse_;
+  bool            resetPending_;
+
+  uint16_t        workingRegister;
+  uint8_t         *pLength_;
+  int8_t          offset_;
+  uint8_t         stepCountIdx_;
+  uint16_t        *pShiftReg_;
+  uint8_t         *pLengthArray_;
+
+  Stochasticizer  stoch_;
+  const uint8_t   NUM_PATTERNS;
+  uint16_t        *pPatternBank;
+  uint8_t         currentPattern_;
+  uint8_t         nextPattern_;
+
+  void changeBank_(uint8_t bank)
   {
-    uint8_t pattern;
-    uint16_t shiftReg;
-  };
-  Casino casino;
+    // Rotate the new pattern to the current step
+    if (offset_ > 0)
+    {
+      *pShiftReg_ = (*pShiftReg_ << offset_) | (*pShiftReg_ >> (16 - offset_));
+    }
+    else if (offset_ < 0)
+    {
+      *pShiftReg_ = (*pShiftReg_ >> -offset_) | (*pShiftReg_ << (16 + offset_));
+    }
+  }
 };
 
 

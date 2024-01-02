@@ -54,7 +54,7 @@ public:
   ~OutputRegister()
   {
     delete SR;
-    SR = NULL;
+    SR  = NULL;
     MAP = NULL;
   }
 
@@ -66,6 +66,15 @@ public:
     return Q();
   }
 
+  // Bypasses clock and increment; immediately writes {byteVal} to register {byteNum}
+  void tempWrite(uint8_t byteVal, uint8_t byteNum = 0)
+  {
+    setReg(byteVal, byteNum);
+    latchable<T> :: clock();
+    writeOutputRegister();
+  }
+
+  // Implementation of bitWrite to selected register {byteNum}; requires clock to take effect
   void writeBit(uint8_t bitnum, bool val, uint8_t bytenum = 0)
   {
     uint8_t temp(getReg(bytenum));
@@ -73,11 +82,13 @@ public:
     setReg(temp, bytenum);
   }
 
+  // Returns register {byteNum}
   uint8_t getReg(uint8_t bytenum = 0)
   {
     return (D() >> (8 * bytenum)) & 0xFF;
   }
 
+  // Overwrites register {byteNum} with {val}
   void setReg(uint8_t val, uint8_t bytenum = 0)
   {
     T setVal(T(val) << (8 * bytenum));
@@ -87,22 +98,29 @@ public:
     latchable<T> :: set(temp);
   }
 
+  // Returns Output value
   T Q()
   {
     return latchable<T> :: Q;
   }
 
+  // Returns recent Input value
   T D()
   {
     return latchable<T> :: D;
   }
 
-  void allOff()
+  void allOff(bool maskZero = false)
   {
+    uint8_t mask(0);
+    if (maskZero)
+    {
+      mask |= (Q() & (0x01 << MAP[0]));
+    }
     digitalWrite(LCH, LOW);
     for (uint8_t bn(0); bn < BYTE_COUNT; ++bn)
     {
-      SR->write(0);
+      SR->write(mask);
     }
     digitalWrite(LCH, HIGH);
   }

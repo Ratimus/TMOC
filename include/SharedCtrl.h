@@ -10,7 +10,7 @@ static const uint8_t MAX_BUFFER_SIZE(128);
 static const double  DEFAULT_THRESHOLD(0.05);
 
 ////////////////////////////////////////////////
-//
+// Wraps an ADC channel for use with control classes
 class HardwareCtrl
 {
 protected:
@@ -134,7 +134,7 @@ enum LockState
 
 
 ////////////////////////////////////////////////
-//
+// Defines a control that can be locked and unlocked
 class LockingCtrl
 {
   friend class ModalCtrl;
@@ -245,7 +245,7 @@ protected:
       cli();
       state = STATE_UNLOCKED;
       sei();
-      Serial.printf("%p UNLOCKED @ %d [%d]\n", this, tmpVal, pCTRL->read());
+      // Serial.printf("%p UNLOCKED @ %d [%d]\n", this, tmpVal, pCTRL->read());
       return tmpVal;
     }
 
@@ -320,6 +320,8 @@ protected:
 ////////////////////////////////////////////////////////////////////////
 // VIRTUAL CTRL
 ////////////////////////////////////////////////////////////////////////
+// Wraps a raw LockingControl to return a limited number of options rather
+// than a raw ADC value and uses hysteresis to prevent erratic mode-switching
 class VirtualCtrl : public LockingCtrl
 {
   const int16_t* loVal;
@@ -380,6 +382,11 @@ public:
     }
   }
 
+  void jam (int16_t slice)
+  {
+    lockSlice = slice;
+    LockingCtrl :: jam(sliceToVal(lockSlice));
+  }
   ////////////////////////////////////////////////
   //
   void updateRange(int16_t inHI, int16_t inLO = 0)
@@ -420,8 +427,15 @@ public:
     sei();
 
     // Return lockVal if locked
-    if (tmpState == STATE_LOCKED || !pCTRL->isReady())
+    if (tmpState == STATE_LOCKED)
     {
+      // Serial.printf("    %p LOCKED @ %u\n", this, lockSlice);
+      return lockSlice;
+    }
+
+    if (!pCTRL->isReady())
+    {
+      // Serial.printf("    %p ADC not ready! lock val = %u\n", this, lockSlice);
       return lockSlice;
     }
 
@@ -442,8 +456,15 @@ public:
         // Serial.printf("%p LOCK->UNLOCK; slice: %d, lockSlice: %d, val: %d\n", this, tmpSlice,lockSlice, tmpVal);
         // Serial.printf(" hiVal: %d, loVal: %d, rangeHi: %d, rangeLo: %d\n",*hiVal, *loVal, rangeHi, rangeLo);
       }
+      else
+      {
+        // Serial.printf("read slice: %u, lock slice: %u\n", tmpSlice, lockSlice);
+      }
+
+      return lockSlice;
     }
-    else if(tmpSlice > lockSlice)
+
+    if(tmpSlice > lockSlice)
     {
       int16_t exc(tmpVal - sliceToVal(tmpSlice));
       if (exc > 50)
@@ -468,7 +489,8 @@ public:
 
 
 ////////////////////////////////////////////////
-//
+// Defines an array of Virtual Controls that can be wrapped to produce
+// a bank of mode-dependent controls
 class ArrayCtrl : public VirtualCtrl
 {
   int16_t* pARR;
@@ -589,6 +611,17 @@ public:
   void jam(int16_t jamVal)
   {
     pACTIVE->jam(jamVal);
+  }
+
+  void overWrite()
+  {
+    int16_t tmpVal(pACTIVE->pCTRL->read());
+    int16_t tmpSlice(pACTIVE->valToSlice(tmpVal));
+    // Serial.printf("val: %u, slice: %u\n", tmpVal, tmpSlice);
+    jam(tmpSlice);
+    // Serial.println("    reqUnlock");
+    pACTIVE->reqUnlock();
+    // Serial.printf("    lock val: %u\n", pACTIVE->getLockVal());
   }
 };
 

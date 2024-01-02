@@ -48,7 +48,7 @@ public:
   // Constructor
   ClickEncoder(uint8_t A, uint8_t B, uint8_t BTN,
                uint8_t stepsPerNotch = 1, bool activeLow = true);
-
+  
   // Call every 1 ms in ISR
   void    service(void);
   void    updateButton(void);

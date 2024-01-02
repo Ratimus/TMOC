@@ -202,7 +202,7 @@ ButtonState MagicButton :: readAndFree(void)
     outputCleared = true;
   }
   retVal = state[1];
-  // service();
+  service();
   sei();
   return retVal;
 }
