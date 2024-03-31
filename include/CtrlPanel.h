@@ -8,9 +8,9 @@ extern MCP3208 * pADC0;
 extern ModalCtrl * pCV;
 extern HardwareCtrl* pFaders[NUM_FADERS];
 
-const int8_t HIGH_NOTE(12);
 const int8_t LOW_NOTE(0);
-constexpr uint8_t NUM_BANKS(8);
+const int8_t HIGH_NOTE(24);
+constexpr uint8_t NUM_BANKS(3);
 
 void initADC();
 void initFaders(bool & running);

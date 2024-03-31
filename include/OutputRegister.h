@@ -45,8 +45,7 @@ public:
   LCH(csPin),
   MAP(mapping),
   BYTE_COUNT(sizeof(T)),
-  NUM_BITS(sizeof(T) * 8),
-  GATE_LENGTH(100)
+  NUM_BITS(sizeof(T) * 8)
   {
     SR = new FastShiftOut(DAT, CLK, LSBFIRST);
   }
@@ -62,7 +61,6 @@ public:
   {
     latchable<T> :: clock();
     writeOutputRegister();
-    onTime = millis();
     return Q();
   }
 
@@ -110,34 +108,14 @@ public:
     return latchable<T> :: D;
   }
 
-  void allOff(bool maskZero = false)
+  void allOff()
   {
-    uint8_t mask(0);
-    if (maskZero)
-    {
-      mask |= (Q() & (0x01 << MAP[0]));
-    }
     digitalWrite(LCH, LOW);
     for (uint8_t bn(0); bn < BYTE_COUNT; ++bn)
     {
-      SR->write(mask);
+      SR->write(0);
     }
     digitalWrite(LCH, HIGH);
-  }
-
-  bool clockExpired()
-  {
-    if (!onTime)
-    {
-      return false;
-    }
-
-    if (millis() - onTime <= static_cast<u_long>(GATE_LENGTH))
-    {
-      return false;
-    }
-    onTime = 0;
-    return true;
   }
 
 protected:
@@ -166,8 +144,6 @@ protected:
   }
 
   T REGISTER;
-  u_long onTime;
-  uint8_t GATE_LENGTH;
 };
 
 #endif

@@ -25,6 +25,27 @@ struct Stochasticizer
 
   bool stochasticize(bool startVal)
   {
+    // CASSIDEBUG: add this stuff some day, maybe?
+    // int decide = random(1, 511);  // and a random integer (1:510)
+    // TuringCurve = floor(512.0 * (1.0 - cos((1.0 * pVolts->readMiliVolts()) * 3.1412 / 1024.0)));
+    //
+    // if (Turing >= 512) { // Here, we're in the right-hand side of the TURING control
+    //   if (decide < 1024 - TuringCurve) { // compare the random variable 'decide' with 1024-Turing Curve ; if it's smaller
+    //     gates[0] = randgate;             // randomise gate 0
+    //   }
+    //   else {                             // otherwise,
+    //     gates[0] = (gatecarry);          // feedback the bit from the selected point in the shift register into gate 0
+    //   }
+    // }
+    // else {              // Here, we're in the left-hand side of the TURING control
+    //   if (decide < TuringCurve) {    // compare the random variable 'decide' with Turing Curve ; if it's smaller
+    //     gates[0] = randgate;         // randomise gate 0
+    //   }
+    //   else {                         // otherwise,
+    //     gates[0] = not(gatecarry);   // feedback the complement of the bit from the selected point in the shift register into gate 0
+    //   }
+    // }
+
     float prob(pVolts->readMiliVolts());
     if (prob > THRESH_HIGH)
     {
@@ -81,8 +102,8 @@ public:
   }
 
 
-  // Shifts register, returns true on downbeat
-  bool iterate(int8_t steps)
+  // Shifts register, returns current step [i.e. prior to advancing]
+  uint8_t iterate(int8_t steps)
   {
     if (currentPattern_ != nextPattern_)
     {
@@ -93,7 +114,7 @@ public:
     {
       resetPending_ = false;
       offset_       = steps;
-      return true;
+      return 0;
     }
 
     uint8_t leftAmt;
@@ -131,7 +152,7 @@ public:
     workingRegister = (workingRegister << leftAmt) | (workingRegister >> rightAmt);
     bitWrite(workingRegister, writeIdx, writeVal);
 
-    bool downBeat(offset_ == 0);
+    uint8_t retVal(offset_);
 
     offset_ += steps;
     if ((offset_ >= *pLength_) || (offset_ <= -*pLength_))
@@ -139,7 +160,7 @@ public:
       offset_ = 0;
     }
 
-    return downBeat;
+    return retVal;
   }
 
   void reset()
@@ -209,6 +230,11 @@ public:
     bankNum %= NUM_PATTERNS;
     nextPattern_ = bankNum;
     return nextPattern_;
+  }
+
+  void writeBit(uint8_t idx, bool bitVal)
+  {
+    bitWrite(workingRegister, idx, bitVal);
   }
 
   void preFill(uint16_t fillVal, uint8_t bankNum)

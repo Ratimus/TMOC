@@ -13,17 +13,29 @@
 #include <ClickEncoderInterface.h>
 #include "ESP32_New_TimerInterrupt.h"
 
+// Set TRUE to enable Serial printing (and whatever else)
+bool CASSIDEBUG(0);
+#define print if (CASSIDEBUG) Serial.print
+#define printf if (CASSIDEBUG) Serial.printf
+#define println if (CASSIDEBUG) Serial.println
+
 Adafruit_MCP4728 MCP4728;
 
 MagicButton writeHigh(TOGGLE_UP, 1, 1);
 MagicButton writeLow(TOGGLE_DOWN, 1, 1);
 
-ClickEncoder encoder(ENC_A, ENC_B, ENC_SW, ENC_STEPS_PER_NOTCH, ENC_ACTIVE_LOW);
-ClickEncoderInterface encoderInterface(encoder, ENC_SENSITIVITY);
+ClickEncoder encoder(ENC_A,
+                     ENC_B,
+                     ENC_SW,
+                     ENC_STEPS_PER_NOTCH,
+                     ENC_ACTIVE_LOW);
+
+ClickEncoderInterface encoderInterface(encoder,
+                                       ENC_SENSITIVITY);
 
 // Gate Inputs:
 //  - Clock
-//  - [was Trig out]
+//  - Reset [was Trig out]
 // CV Inputs:
 //  - CV
 //  - [was Seq out]
@@ -31,42 +43,51 @@ ClickEncoderInterface encoderInterface(encoder, ENC_SENSITIVITY);
 //  - [was Voltages Seq out]
 //  - [was Voltages Inverted out]
 // Controls:
-//  - [was Scale]
+//  - Mode [was Scale]
 //  - Turing
-//  - [was Voltages Scale]
-//  - [was Voltages Offset]
 
 ESP32AnalogRead cvA;        // "CV" input
 ESP32AnalogRead cvB;        // "NOISE" input
 ESP32AnalogRead turing;     // "LOOP" variable resistor
 
-
+uint8_t OctaveRange(1);
 uint8_t currentBank(0);
+
+// Indicates whether the current fader bank has been filled with real data
 bool faderInitValsSet[NUM_BANKS];
 
-bool pendingMove(0);
-bool pendingChange(0);
+bool reverse(0);
+bool set_bit_0(0);
+bool clear_bit_0(0);
 
 hw_timer_t *timer1(NULL);   // Timer library takes care of telling this where to point
 
+// Here's the ESP32 DAC output
 DacESP32 voltsExp(static_cast<gpio_num_t>(DAC1_CV_OUT));
 
-TuringRegister alan(&ctrl);
+// Core Shift Register functionality
+TuringRegister alan(&turing);
 
+// Hardware interfaces for 74HC595s
 OutputRegister<uint16_t>  leds(SR_CLK, SR_DATA, LED_SR_CS, regMap);
 OutputRegister<uint8_t>   triggers(SR_CLK, SR_DATA, TRIG_SR_CS, trgMap);
 
+// Data values for 74HC595s
 uint8_t dacRegister(0);    // Blue LEDs + DAC8080
 uint8_t fdrRegister(0);    // Green Fader LEDs
 uint8_t trgRegister(0);    // Gate/Trigger outputs + yellow LEDs
-uint8_t faderLockStateReg(0);
+
+// Don't light up "locked" faders regardless of bit vals
+uint8_t faderLockStateReg(0xFF);
 bool    faderLocksChanged(1);
 
-ScaleType currentScale(harmMinor);
-volatile bool gateInVals    [NUM_GATES_IN]{0, 0};
-volatile bool newGateFlags  [NUM_GATES_IN]{0, 0};
+// Keep track of Clock and Reset digital inputs
+volatile bool   gateInVals    [NUM_GATES_IN]{0, 0};
+volatile int8_t newGateFlags  [NUM_GATES_IN]{0, 0};
 
 const MCP4728_channel_t DAC_CH[]{MCP4728_CHANNEL_D, MCP4728_CHANNEL_B, MCP4728_CHANNEL_A, MCP4728_CHANNEL_C};
+
+// Don't service faders in ISR until they're fully initialized
 bool  fadersRunning(false);
 float ONE_OVER_ADC_MAX(0.0);
 
@@ -75,30 +96,7 @@ void setDacRegister(uint8_t val)  { dacRegister = val; leds.setReg(dacRegister, 
 void setTrigRegister(uint8_t val) { trgRegister = val; triggers.setReg(trgRegister); }
 void setFaderRegister(uint8_t val){ fdrRegister = val; leds.setReg(fdrRegister, 0);  }
 
-uint16_t quantize(uint16_t note)
-{
-  if (note > 96)
-  {
-    return 96;
-  }
-
-  if (currentScale == chromatic)
-  {
-    Serial.println("chromatic");
-    return note;
-  }
-
-  if (currentScale == wholeTone)
-  {
-    Serial.println("whole tone");
-    return (note / 2) * 2;
-  }
-
-  const uint8_t *pScale = *(SCALES + (uint8_t)currentScale);
-  uint16_t octave(note / 12);
-  uint16_t semiTone(*(pScale + note % 12));
-  return octave * 12 + semiTone;
-}
+void calibrate();
 
 ////////////////////////////
 // ISR for Timer 1
@@ -119,73 +117,56 @@ void ICACHE_RAM_ATTR onTimer1()
   for (uint8_t gate(0); gate < NUM_GATES_IN; ++gate)
   {
     bool val(!digitalRead(GATE_PIN[gate]));
-    if (val && !gateInVals[gate])
+    if (val != gateInVals[gate])
     {
-      newGateFlags[gate] = 1;
+      newGateFlags[gate] = (int8_t)val - (int8_t)gateInVals[gate];
     }
     gateInVals[gate] = val;
-  }
-
-  if (triggers.clockExpired())
-  {
-    triggers.allOff(true);
   }
 }
 
 
 // Thread-safe getter for gate input rising edge flags
-bool readFlag(uint8_t gate)
+int8_t readFlag(uint8_t gate)
 {
-  bool ret(0);
+  int8_t ret;
   cli();
-  if (newGateFlags[gate])
-  {
-    ret = 1;
-    newGateFlags[gate] = 0;
-  }
+  ret = newGateFlags[gate];
+  newGateFlags[gate] = 0;
   sei();
 
-  if (ret)
-  {
-    if (gate)
-    {
-      Serial.printf("RESET: %s\n", ret ? "TRUE" : "FALSE");
-    }
-    else
-    {
-      Serial.printf("CLOCK: %s\n", ret ? "TRUE" : "FALSE");
-    }
-  }
   return ret;
 }
 
-bool checkClockFlag(){ return readFlag(0); }
-bool checkResetFlag(){ return readFlag(1); }
+int8_t checkClockFlag(){ return readFlag(0); }
+int8_t checkResetFlag(){ return readFlag(1) == 1; }
 
 
 // Spits out the binary representation of "val" to the serial monitor
 void printBits(uint8_t  val)
 {
-  for (auto bit = 7; bit >= 0; --bit)
+  for (auto bit = 0; bit < 8; ++bit)
   {
-    Serial.print(bitRead(val, bit) ? '1' : '0');
+    print(bitRead(val, bit) ? '1' : '0');
   }
-  Serial.println(' ');
+  println(' ');
 }
+
+
 void printBits(uint16_t val)
 {
   for (auto bit = 15; bit >= 0; --bit)
   {
-    Serial.print(bitRead(val, bit) ? '1' : '0');
+    print(bitRead(val, bit) ? '1' : '0');
   }
-  Serial.println(' ');
+  println(' ');
 }
 
-void calibrate();
-bool ON_BATTERY_POWER(0);
+
 void setup()
 {
-  // Serial.begin(115200);
+  if (CASSIDEBUG) Serial.begin(115200);
+  delay(100);
 
   pinMode(LED_SR_CS,        OUTPUT);
   pinMode(TRIG_SR_CS,       OUTPUT);
@@ -200,7 +181,7 @@ void setup()
 
   cvA.attach(CV_IN_A);
   cvB.attach(CV_IN_B);
-  ctrl.attach(LOOP_CTRL);
+  turing.attach(LOOP_CTRL);
 
   pinMode(CLOCK_IN,         INPUT);
   pinMode(RESET_IN,         INPUT);
@@ -211,13 +192,13 @@ void setup()
   initADC();
   ONE_OVER_ADC_MAX = 1.0f / pADC0->maxValue();
 
-  Serial.println("MCP4728 test...");
+  println("MCP4728 test...");
   if (!MCP4728.begin(0x64))
   {
-    Serial.println("Failed to find MCP4728 chip");
+    println("Failed to find MCP4728 chip");
     while (1) { delay(1); }
   }
-  Serial.println("MCP4728 chip initialized");
+  println("MCP4728 chip initialized");
 
   for (uint8_t ch(0); ch < 4; ++ch)
   {
@@ -240,33 +221,33 @@ void setup()
   {
     (pCV + fd)->select(0);
     (pCV + fd)->overWrite();
-    bitWrite(faderLockStateReg, fd, (pCV + fd)->pACTIVE->getLockState() != STATE_UNLOCKED);
-    Serial.printf("CH %u: %u\n", fd, (pCV + fd)->readActiveCtrl());
+
+    // Don't light up locked faders
+    bitWrite(faderLockStateReg, fd, (pCV + fd)->pACTIVE->getLockState() == STATE_UNLOCKED);
+    printf("CH %u: %u\n", fd, (pCV + fd)->readActiveCtrl());
   }
   faderInitValsSet[0] = true;
   // calibrate();
 
-  randomSeed(analogRead(UNUSED_ANALOG));
   uint16_t randomReg((random(1, 255) << 8) | random(1, 255));
   for (uint8_t bk(0); bk < NUM_BANKS; ++bk)
   {
     alan.preFill(randomReg, bk);
   }
 
-  uint8_t initReg(alan.getOutput());
-  setDacRegister(initReg);
-  setFaderRegister(initReg | faderLockStateReg);
+  setDacRegister(alan.getOutput());
+  setFaderRegister(dacRegister & faderLockStateReg);
   leds.clock();
-  Serial.printf("%sON BATTERY POWER\n", ON_BATTERY_POWER ? "" : "NOT ");
 }
 
 
 void writeRawValToDac(uint8_t ch, uint16_t val)
 {
-  MCP4728.setChannelValue(DAC_CH[ch], val, MCP4728_VREF_INTERNAL);
+  MCP4728.setChannelValue(DAC_CH[ch], val, MCP4728_VREF_INTERNAL, MCP4728_GAIN_2X);
 }
 
 
+// Translates note values to raw DAC outputs using calibration tables
 uint16_t noteToDacVal(uint8_t ch, uint16_t note)
 {
   const uint16_t *calTable(DAC_CAL_TABLES[DAC_CH[ch]]);
@@ -298,158 +279,204 @@ uint16_t noteToDacVal(uint8_t ch, uint16_t note)
 }
 
 
-void writeNoteToDac(uint8_t ch, uint16_t note)
+// void getStepIndices(const uint8_t reg, uint8_t *indices)
+// {
+//   *(indices) = 0;
+//   bool s0(bitRead(reg, 0) ^ !(bitRead(reg, 1) ^ bitRead(reg, 2)));
+//   bool s1(bitRead(reg, 3) ^ !(bitRead(reg, 4) ^ bitRead(reg, 5)));
+//   bool s2(bitRead(reg, 6) ^ !(bitRead(reg, 7) ^ bitRead(reg, 0)));
+//   bitWrite(*(indices + 0), 0, s0);
+//   bitWrite(*(indices + 0), 1, s1);
+//   bitWrite(*(indices + 0), 2, s2);
+
+//   *(indices + 1) = 0;
+//   s0 = (bitRead(reg, 7) ^ !(bitRead(reg, 4) ^ bitRead(reg, 1)));
+//   s1 = (bitRead(reg, 6) ^ !(bitRead(reg, 3) ^ bitRead(reg, 0)));
+//   s2 = (bitRead(reg, 5) ^ !(bitRead(reg, 2) ^ bitRead(reg, 7)));
+//   bitWrite(*(indices + 1), 0, s0);
+//   bitWrite(*(indices + 1), 1, s1);
+//   bitWrite(*(indices + 1), 2, s2);
+
+//   *(indices + 2) = 0;
+//   s0 = (bitRead(reg, 3) ^ !(bitRead(reg, 6) ^ bitRead(reg, 1)));
+//   s1 = (bitRead(reg, 0) ^ !(bitRead(reg, 2) ^ bitRead(reg, 5)));
+//   s2 = (bitRead(reg, 5) ^ !(bitRead(reg, 7) ^ bitRead(reg, 1)));
+//   bitWrite(*(indices + 2), 0, s0);
+//   bitWrite(*(indices + 2), 1, s1);
+//   bitWrite(*(indices + 2), 2, s2);
+
+//   *(indices + 3) = 0;
+//   s0 = (bitRead(reg, 0) ^ !(bitRead(reg, 6) ^ bitRead(reg, 5)));
+//   s1 = (bitRead(reg, 2) ^ !(bitRead(reg, 1) ^ bitRead(reg, 7)));
+//   s2 = (bitRead(reg, 4) ^ !(bitRead(reg, 3) ^ bitRead(reg, 1)));
+//   bitWrite(*(indices + 3), 0, s0);
+//   bitWrite(*(indices + 3), 1, s1);
+//   bitWrite(*(indices + 3), 2, s2);
+// }
+
+
+uint8_t getDrunkenIndex()
 {
-  writeRawValToDac(ch, noteToDacVal(ch, note));
+  static int8_t drunkStep(0);
+  int8_t rn(random(0, 101));
+
+  if (rn > 90)
+  {
+    rn = 3;
+  }
+  else if (rn > 70)
+  {
+    rn = 2;
+  }
+  else
+  {
+    rn = 1;
+  }
+
+  if (random(0, 2))
+  {
+    rn *= -1;
+  }
+
+  drunkStep += rn;
+  if (drunkStep < 0)
+  {
+    drunkStep += 8;
+  }
+  else if (drunkStep > 7)
+  {
+    drunkStep -= 8;
+  }
+
+  return drunkStep;
 }
 
 
-void getStepIndices(const uint8_t reg, uint8_t (*indices)[4])
+// DAC 0: Faders & register
+// DAC 1: Faders & ~register
+// DAC 2: abs(DAC 1 - DAC 0)
+// DAC 3: DAC 0 if reg & BIT0 else no change from last value
+void expandVoltages(uint8_t shiftReg)
 {
-  *indices[0] = 0;
-  bool s0(bitRead(reg, 0) ^ !(bitRead(reg, 1) ^ bitRead(reg, 2)));
-  bool s1(bitRead(reg, 3) ^ !(bitRead(reg, 4) ^ bitRead(reg, 5)));
-  bool s2(bitRead(reg, 6) ^ !(bitRead(reg, 7) ^ bitRead(reg, 0)));
-  bitWrite(*indices[0], 0, s0);
-  bitWrite(*indices[0], 1, s1);
-  bitWrite(*indices[0], 2, s2);
-
-  *indices[1] = 0;
-  s0 = (bitRead(reg, 7) ^ !(bitRead(reg, 4) ^ bitRead(reg, 1)));
-  s1 = (bitRead(reg, 6) ^ !(bitRead(reg, 3) ^ bitRead(reg, 0)));
-  s2 = (bitRead(reg, 5) ^ !(bitRead(reg, 2) ^ bitRead(reg, 7)));
-  bitWrite(*indices[1], 0, s0);
-  bitWrite(*indices[1], 1, s1);
-  bitWrite(*indices[1], 2, s2);
-
-  *indices[2] = 0;
-  s0 = (bitRead(reg, 3) ^ !(bitRead(reg, 6) ^ bitRead(reg, 1)));
-  s1 = (bitRead(reg, 0) ^ !(bitRead(reg, 2) ^ bitRead(reg, 5)));
-  s2 = (bitRead(reg, 5) ^ !(bitRead(reg, 7) ^ bitRead(reg, 1)));
-  bitWrite(*indices[2], 0, s0);
-  bitWrite(*indices[2], 1, s1);
-  bitWrite(*indices[2], 2, s2);
-
-  *indices[3] = 0;
-  s0 = (bitRead(reg, 0) ^ !(bitRead(reg, 6) ^ bitRead(reg, 5)));
-  s1 = (bitRead(reg, 2) ^ !(bitRead(reg, 1) ^ bitRead(reg, 7)));
-  s2 = (bitRead(reg, 4) ^ !(bitRead(reg, 3) ^ bitRead(reg, 1)));
-  bitWrite(*indices[3], 0, s0);
-  bitWrite(*indices[3], 1, s1);
-  bitWrite(*indices[3], 2, s2);
-}
-
-
-void expandVoltages()
-{
-  uint8_t stepIndices[4];
-  getStepIndices(dacRegister, &stepIndices);
-
   uint16_t faderVals[8];
   uint16_t noteVals[4]{0, 0, 0, 0};
+
   for (uint8_t ch(0); ch < NUM_FADERS; ++ch)
   {
     faderVals[ch] = (pCV + ch)->readActiveCtrl();
-    if (bitRead(dacRegister, ch))
+
+    if (bitRead(shiftReg, ch))
     {
+      // CV A: Faders & register
       noteVals[0] += faderVals[ch];
     }
     else
     {
-      noteVals[2] += faderVals[ch];
+      // CV B: Faders & ~register
+      noteVals[1] += faderVals[ch];
     }
+    printf("Fader %u: %u\n", ch, faderVals[ch]);
   }
 
-  noteVals[1] = faderVals[stepIndices[0]] + faderVals[stepIndices[1]];
-  noteVals[3] = faderVals[stepIndices[2]] + faderVals[stepIndices[3]];
-
-  float sum((float)noteVals[0]);
-  sum *= ONE_OVER_ADC_MAX;
-  if (sum > 1.0f)
+  // CV C: abs(CV A - CV B)
+  if (noteVals[0] > noteVals[1])
   {
-    sum = 1.0f;
+    noteVals[2] = noteVals[0] - noteVals[1];
   }
-  voltsExp.outputVoltage(sum * 3.3f);
+  else
+  {
+    noteVals[2] = noteVals[1] - noteVals[0];
+  }
+
+  static uint16_t lastCV_D(noteVals[0]);
+  if (bitRead(shiftReg, 0))
+  {
+    lastCV_D = noteVals[0];
+  }
+  noteVals[3] = lastCV_D;
 
   for (uint8_t ch(0); ch < 4; ++ch)
   {
-    writeNoteToDac(ch, quantize(noteVals[ch]));
+    uint16_t val(noteToDacVal(ch, noteVals[ch]));
+    printf("DAC %u note: %u, val: %u\n", ch, noteVals[ch], val);
+    writeRawValToDac(ch, val);
   }
+
+  uint8_t jnkm(~dacRegister);
+  voltsExp.outputVoltage(jnkm);
+  printf("Jank : %u\n", jnkm);
 }
 
 
-uint8_t calcTriggerVals(uint8_t inputReg)
+uint8_t pulseIt(int8_t step, uint8_t inputReg)
 {
-  // Determine how far through the loop we are
-  uint8_t percent(map(alan.getStep(), 0, alan.getLength() + 1, 0, 256));
+  // Bit 0 from shift register bit 0
+  uint8_t outputReg(inputReg & BIT0);
 
-  // Reverse out progress val and XOR it with our input val
-  uint8_t outputReg(bitReverse(percent) ^ inputReg);
+  // Bit 1 is !Bit 0
+  outputReg |= (~outputReg << 1) & BIT1;
 
-  // Preserve bit0 from the input because it's special
-  bitWrite(outputReg, 0, bitRead(inputReg, 0));
+  // Bit 2 is high if register value is >= some random number
+  if (random() % 256 <= inputReg)
+  {
+    outputReg |= BIT2;
+  }
+
+  // Bit 3 is !Bit2
+  outputReg |= (~outputReg << 1) & BIT3;
+
+  outputReg |= (((inputReg & BIT1) >> 1) ^ ((inputReg & BIT6) >> 6) << 4) & BIT4;
+  outputReg |= (((inputReg & BIT0) >> 0) ^ ((inputReg & BIT4) >> 4) << 5) & BIT5;
+  outputReg |= (((inputReg & BIT3) >> 3) ^ ((inputReg & BIT7) >> 7) << 6) & BIT6;
+  outputReg |= (((inputReg & BIT2) >> 2) ^ ((inputReg & BIT5) >> 5) << 7) & BIT7;
+
   return outputReg;
 }
 
 
-void turingStep(int8_t steps)
+void turingStep(int8_t stepAmount)
 {
   // Turn off the triggers in case a new clock came in before they expired
-  triggers.allOff(true);
-  Serial.printf("----------------------------\n");
-  if (pendingMove || pendingChange)
-  {
-    if (pendingMove)
-    {
-      alan.moveToPattern(currentBank);
-      pendingMove = false;
-    }
-    else
-    {
-      alan.overWritePattern(currentBank);
-      pendingChange = false;
-    }
-
-    for (uint8_t fd = 0; fd < NUM_FADERS; ++fd)
-    {
-      (pCV + fd)->select(currentBank);
-      if (!faderInitValsSet[currentBank])
-      {
-        (pCV + fd)->overWrite();
-        faderInitValsSet[currentBank] = true;
-      }
-      Serial.printf("control %d: %p\n", fd, (pCV + fd)->pACTIVE);
-      Serial.printf("val: %u\n", (pCV + fd)->readActiveCtrl());
-      bitWrite(faderLockStateReg, fd, (pCV + fd)->pACTIVE->getLockState() != LockState :: STATE_UNLOCKED);
-    }
-
-    Serial.printf("------ select track %d ------\n", currentBank);
-    faderLocksChanged = true;
-  }
-
+  printf("----------------------------\n");
   if (checkResetFlag())
   {
     alan.reset();
   }
 
-  bool downBeat(alan.iterate(steps));
+  int8_t alanStep(alan.iterate(stepAmount));
+  if (set_bit_0)
+  {
+    set_bit_0 = false;
+    uint8_t idx(stepAmount > 0 ? 0 : 7);
+    alan.writeBit(idx, 1);
+    println("set bit 0");
+  }
+  else if (clear_bit_0)
+  {
+    clear_bit_0 = false;
+    uint8_t idx(stepAmount > 0 ? 0 : 7);
+    alan.writeBit(idx, 0);
+    println("clear bit 0");
+  }
 
+  // Get the Turing register pattern value
   uint8_t tmpReg(alan.getOutput());
   setDacRegister(tmpReg);
-  setFaderRegister(dacRegister | faderLockStateReg);
-  uint8_t trigReg(calcTriggerVals(dacRegister));
 
-  // Trig 0 is the down beat
-  bitWrite(trigReg, 7, downBeat);
+  // Update voltages so they are ready when the triggers update
+  expandVoltages(dacRegister);
+  setFaderRegister(dacRegister & faderLockStateReg);
+
+  uint8_t trigReg(pulseIt(alanStep, dacRegister));
   setTrigRegister(trigReg);
-  Serial.print("output:  ");
-  printBits(trigReg);
-
-  // Update voltages first so they are ready when the triggers update
-  expandVoltages();
 
   leds.clock();
   triggers.clock();
+
+  print("register:  ");
+  printBits(dacRegister);
+  print("output  :  ");
+  printBits(trigReg);
 }
 
 
@@ -459,148 +486,106 @@ void handleEncoder()
   switch(encoderInterface.getEvent())
   {
     case encEvnts :: DblClick:
-      alan.lengthMINUS();
-      Serial.printf("LENGTH: %u\n", alan.getLength());
+      set_bit_0 = true;
+      // printf("LENGTH: %u\n", alan.getLength());
       break;
 
     case encEvnts :: Click:
-      alan.lengthPLUS();
-      Serial.printf("LENGTH: %u\n", alan.getLength());
+      clear_bit_0 = true;
       break;
 
     case encEvnts :: Hold:
-      alan.reset();
-      Serial.println("reset");
       break;
 
     case encEvnts :: Right:
+      if (CASSIDEBUG) turingStep(1);
+      break;
+
     case encEvnts :: Left:
+      if (CASSIDEBUG) turingStep(-1);
+      break;
+
     case encEvnts :: Press:
       break;
 
-
     case encEvnts :: ClickHold:
-      currentScale = ScaleType((int)currentScale + 1);
-      if (currentScale == numScales)
-      {
-        currentScale = ScaleType(0);
-      }
       break;
 
     case encEvnts :: ShiftLeft:
-      if (ON_BATTERY_POWER) turingStep(-1);
       break;
 
     case encEvnts :: ShiftRight:
-      if (ON_BATTERY_POWER) turingStep(1);
       break;
 
     case encEvnts :: NUM_ENC_EVNTS:
+      break;
+
     default:
       break;
   }
 }
 
 
-void ReadCtrls()
-{
-  static bool initialized(0);
-  if (!initialized)
-  {
-    initialized = true;
-    for (uint8_t fd = 0; fd < NUM_FADERS; ++fd)
-    {
-      (pCV + fd)->select(currentBank);
-      Serial.printf("control %d: %p\n", fd, (pCV + fd)->pACTIVE);
-    }
-  }
-}
-
-
 void loop()
 {
-  if (checkClockFlag())
+  if (checkClockFlag() == 1)
   {
-    int8_t step(1);
-    uint16_t cvbVal(cvB.readRaw());
-    Serial.printf("Loop: %u\n", ctrl.readRaw());
-    Serial.printf("CV_A: %u\n", cvA.readRaw());
-    Serial.printf("CV_B: %u\n", cvbVal);
-    if (cvbVal > 2047)
-    {
-      step = -1;
-    }
-    turingStep(step);
+    turingStep((cvB.readRaw() > 2047) ? -1 : 1);
+  }
+  else if (checkClockFlag() == -1)
+  {
+    triggers.allOff();
   }
 
   ButtonState clickies[]{ writeLow.readAndFree(), writeHigh.readAndFree() };
-  // Click Down:        store current pattern @ n and move to n-1
-  // Click Up:          store current pattern @ n and move to n+1
-  // DoubleClick Up:    store current pattern @ n+1 and "move" to n+1
-  // DoubleClick Down:  store current pattern @ n-1 and "move" to n-1
-  if (clickies[0] == ButtonState :: Clicked || clickies[1] == ButtonState :: Clicked)
-  {
-    pendingMove   = true;
-    pendingChange = false;
-    if (clickies[1] == ButtonState :: Clicked)
-    {
-      ++currentBank;
-      currentBank %= NUM_BANKS;
-    }
-    else
-    {
-      if (currentBank == 0)
-      {
-        currentBank = NUM_BANKS - 1;
-      }
-      else
-      {
-        --currentBank;
-      }
-    }
-  }
-  else if (clickies[0] == ButtonState :: DoubleClicked || clickies[1] == ButtonState :: DoubleClicked)
-  {
-    pendingMove   = false;
-    pendingChange = true;
-    uint8_t next(currentBank);
-    if (clickies[1] == ButtonState :: DoubleClicked)
-    {
-      ++currentBank;
-      currentBank %= NUM_BANKS;
-    }
-    else
-    {
-      if (next == 0)
-      {
-        next = NUM_BANKS - 1;
-      }
-      else
-      {
-        --next;
-      }
-    }
 
-    currentBank = next;
+  // Double-click to change fader octave range (1 to 3 octaves)
+  if ((OctaveRange > 1) && (clickies[0] == ButtonState :: DoubleClicked))
+  {
+    --OctaveRange;
+    faderLocksChanged = true;
+  }
+
+  if ((OctaveRange < 3) && (clickies[1] == ButtonState :: DoubleClicked))
+  {
+    ++OctaveRange;
+    faderLocksChanged = true;
   }
 
   if (faderLocksChanged)
   {
-    for (uint8_t fd(0); fd < NUM_FADERS; ++fd)
+    for (uint8_t fd = 0; fd < NUM_FADERS; ++fd)
     {
-
-      Serial.printf("control %d: %p\n", fd, (pCV + fd)->pACTIVE);
-      Serial.printf("val: %u\n", (pCV + fd)->readActiveCtrl());
+      (pCV + fd)->select(OctaveRange - 1);
+      if (!faderInitValsSet[OctaveRange - 1])
+      {
+        (pCV + fd)->overWrite();
+        faderInitValsSet[OctaveRange - 1] = true;
+      }
+      bitWrite(faderLockStateReg, fd, (pCV + fd)->pACTIVE->getLockState() == LockState :: STATE_UNLOCKED);
     }
 
     faderLocksChanged = false;
   }
 
+  // Single click to change pattern length
+  if (clickies[0] == ButtonState :: Clicked)
+  {
+    alan.lengthMINUS();
+    printf("LENGTH: %u\n", alan.getLength());
+  }
+
+  if (clickies[1] == ButtonState :: Clicked)
+  {
+    alan.lengthPLUS();
+    printf("LENGTH: %u\n", alan.getLength());
+  }
+
   for (uint8_t fd = 0; fd < NUM_FADERS; ++fd)
   {
     (pCV + fd)->readActiveCtrl();
-    bitWrite(faderLockStateReg, fd, (pCV + fd)->pACTIVE->getLockState() != LockState :: STATE_UNLOCKED);
-    leds.tempWrite(dacRegister | faderLockStateReg);
+    bitWrite(faderLockStateReg, fd, (pCV + fd)->pACTIVE->getLockState() == LockState :: STATE_UNLOCKED);
+    leds.tempWrite(dacRegister & faderLockStateReg);
   }
 
   handleEncoder();
@@ -643,7 +628,7 @@ void calibrate()
 
   uint16_t outval(0);
   (pCV + selch)->select(0);
-  Serial.printf("ch: %u\n", selch);
+  printf("ch: %u\n", selch);
   while (true)
   {
     if (writeHigh.readAndFree())
@@ -652,10 +637,10 @@ void calibrate()
       ++selch;
       if (selch == 4) selch = 0;
       selreg = 0 | (1 << selch);
-      (pCV + selch)->select(0);
+      (pCV + selch)-> select(0);
       leds.tempWrite(selreg, 0);
       leds.tempWrite(selreg, 1);
-      Serial.printf("ch: %u\n", selch);
+      printf("ch: %u\n", selch);
     }
 
     outval = 0;
@@ -667,10 +652,13 @@ void calibrate()
     {
       outval = 4095;
     }
-    MCP4728.setChannelValue((MCP4728_channel_t)selch, outval, MCP4728_VREF_INTERNAL, MCP4728_GAIN_2X);
+    MCP4728.setChannelValue(DAC_CH[selch],
+                            outval,
+                            MCP4728_VREF_INTERNAL,
+                            MCP4728_GAIN_2X);
     if (writeLow.readAndFree())
     {
-      Serial.printf("%u\n", outval);
+      printf("%u\n", outval);
     }
   }
 }

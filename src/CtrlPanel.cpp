@@ -100,179 +100,99 @@ int16_t   ZERO(0);
 int16_t * VirtualCtrl :: sharedZERO(&ZERO);
 
 VirtualCtrl Fader1_pages[NUM_BANKS] = {
-  VirtualCtrl(pFaders[sliderMap[0]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[0]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[0]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[0]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[0]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[0]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[0]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[0]], 0, HIGH_NOTE, LOW_NOTE)
+  VirtualCtrl(pFaders[sliderMap[0]],  6, 12, LOW_NOTE),
+  VirtualCtrl(pFaders[sliderMap[0]], 12, 24, LOW_NOTE),
+  VirtualCtrl(pFaders[sliderMap[0]], 18, 36, LOW_NOTE)
 };
 
 VirtualCtrl Fader2_pages[NUM_BANKS] = {
-  VirtualCtrl(pFaders[sliderMap[1]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[1]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[1]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[1]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[1]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[1]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[1]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[1]], 0, HIGH_NOTE, LOW_NOTE)
+  VirtualCtrl(pFaders[sliderMap[1]],  6, 12, LOW_NOTE),
+  VirtualCtrl(pFaders[sliderMap[1]], 12, 24, LOW_NOTE),
+  VirtualCtrl(pFaders[sliderMap[1]], 18, 36, LOW_NOTE)
 };
 
 VirtualCtrl Fader3_pages[NUM_BANKS] = {
-  VirtualCtrl(pFaders[sliderMap[2]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[2]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[2]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[2]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[2]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[2]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[2]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[2]], 0, HIGH_NOTE, LOW_NOTE)
+  VirtualCtrl(pFaders[sliderMap[2]],  6, 12, LOW_NOTE),
+  VirtualCtrl(pFaders[sliderMap[2]], 12, 24, LOW_NOTE),
+  VirtualCtrl(pFaders[sliderMap[2]], 18, 36, LOW_NOTE)
 };
 
 VirtualCtrl Fader4_pages[NUM_BANKS] = {
-  VirtualCtrl(pFaders[sliderMap[3]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[3]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[3]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[3]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[3]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[3]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[3]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[3]], 0, HIGH_NOTE, LOW_NOTE)
+  VirtualCtrl(pFaders[sliderMap[3]],  6, 12, LOW_NOTE),
+  VirtualCtrl(pFaders[sliderMap[3]], 12, 24, LOW_NOTE),
+  VirtualCtrl(pFaders[sliderMap[3]], 18, 36, LOW_NOTE)
 };
 
 VirtualCtrl Fader5_pages[NUM_BANKS] = {
-  VirtualCtrl(pFaders[sliderMap[4]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[4]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[4]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[4]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[4]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[4]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[4]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[4]], 0, HIGH_NOTE, LOW_NOTE)
+  VirtualCtrl(pFaders[sliderMap[4]],  6, 12, LOW_NOTE),
+  VirtualCtrl(pFaders[sliderMap[4]], 12, 24, LOW_NOTE),
+  VirtualCtrl(pFaders[sliderMap[4]], 18, 36, LOW_NOTE)
 };
 
 VirtualCtrl Fader6_pages[NUM_BANKS] = {
-  VirtualCtrl(pFaders[sliderMap[5]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[5]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[5]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[5]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[5]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[5]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[5]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[5]], 0, HIGH_NOTE, LOW_NOTE)
+  VirtualCtrl(pFaders[sliderMap[5]],  6, 12, LOW_NOTE),
+  VirtualCtrl(pFaders[sliderMap[5]], 12, 24, LOW_NOTE),
+  VirtualCtrl(pFaders[sliderMap[5]], 18, 36, LOW_NOTE)
 };
 
 VirtualCtrl Fader7_pages[NUM_BANKS] = {
-  VirtualCtrl(pFaders[sliderMap[6]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[6]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[6]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[6]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[6]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[6]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[6]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[6]], 0, HIGH_NOTE, LOW_NOTE)
+  VirtualCtrl(pFaders[sliderMap[6]],  6, 12, LOW_NOTE),
+  VirtualCtrl(pFaders[sliderMap[6]], 12, 24, LOW_NOTE),
+  VirtualCtrl(pFaders[sliderMap[6]], 18, 36, LOW_NOTE)
 };
 
 VirtualCtrl Fader8_pages[NUM_BANKS] = {
-  VirtualCtrl(pFaders[sliderMap[7]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[7]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[7]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[7]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[7]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[7]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[7]], 0, HIGH_NOTE, LOW_NOTE),
-  VirtualCtrl(pFaders[sliderMap[7]], 0, HIGH_NOTE, LOW_NOTE)
+  VirtualCtrl(pFaders[sliderMap[7]],  6, 12, LOW_NOTE),
+  VirtualCtrl(pFaders[sliderMap[7]], 12, 24, LOW_NOTE),
+  VirtualCtrl(pFaders[sliderMap[7]], 18, 36, LOW_NOTE)
 };
 
 VirtualCtrl * F0_BANK[] = {
   Fader1_pages + 0,
   Fader1_pages + 1,
-  Fader1_pages + 2,
-  Fader1_pages + 3,
-  Fader1_pages + 4,
-  Fader1_pages + 5,
-  Fader1_pages + 6,
-  Fader1_pages + 7
+  Fader1_pages + 2
 };
 
 VirtualCtrl * F1_BANK[] = {
   Fader2_pages + 0,
   Fader2_pages + 1,
-  Fader2_pages + 2,
-  Fader2_pages + 3,
-  Fader2_pages + 4,
-  Fader2_pages + 5,
-  Fader2_pages + 6,
-  Fader2_pages + 7
+  Fader2_pages + 2
 };
 
 VirtualCtrl * F2_BANK[] = {
   Fader3_pages + 0,
   Fader3_pages + 1,
-  Fader3_pages + 2,
-  Fader3_pages + 3,
-  Fader3_pages + 4,
-  Fader3_pages + 5,
-  Fader3_pages + 6,
-  Fader3_pages + 7
+  Fader3_pages + 2
 };
 
 VirtualCtrl * F3_BANK[] = {
   Fader4_pages + 0,
   Fader4_pages + 1,
-  Fader4_pages + 2,
-  Fader4_pages + 3,
-  Fader4_pages + 4,
-  Fader4_pages + 5,
-  Fader4_pages + 6,
-  Fader4_pages + 7
+  Fader4_pages + 2
 };
 
 VirtualCtrl * F4_BANK[] = {
   Fader5_pages + 0,
   Fader5_pages + 1,
-  Fader5_pages + 2,
-  Fader5_pages + 3,
-  Fader5_pages + 4,
-  Fader5_pages + 5,
-  Fader5_pages + 6,
-  Fader5_pages + 7
+  Fader5_pages + 2
 };
 
 VirtualCtrl * F5_BANK[] = {
   Fader6_pages + 0,
   Fader6_pages + 1,
-  Fader6_pages + 2,
-  Fader6_pages + 3,
-  Fader6_pages + 4,
-  Fader6_pages + 5,
-  Fader6_pages + 6,
-  Fader6_pages + 7
+  Fader6_pages + 2
 };
 
 VirtualCtrl * F6_BANK[] = {
   Fader7_pages + 0,
   Fader7_pages + 1,
-  Fader7_pages + 2,
-  Fader7_pages + 3,
-  Fader7_pages + 4,
-  Fader7_pages + 5,
-  Fader7_pages + 6,
-  Fader7_pages + 7
+  Fader7_pages + 2
 };
 
 VirtualCtrl * F7_BANK[] = {
   Fader8_pages + 0,
   Fader8_pages + 1,
-  Fader8_pages + 2,
-  Fader8_pages + 3,
-  Fader8_pages + 4,
-  Fader8_pages + 5,
-  Fader8_pages + 6,
-  Fader8_pages + 7
+  Fader8_pages + 2
 };
 
 ModalCtrl FADER_BANK[NUM_FADERS] = {
