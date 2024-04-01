@@ -15,12 +15,15 @@ struct Stochasticizer
   float THRESH_HIGH;
 
   ESP32AnalogRead *pVolts;
+  ESP32AnalogRead *pCV;
 
   Stochasticizer(
-    ESP32AnalogRead * voltage):
+    ESP32AnalogRead * voltage,
+    ESP32AnalogRead * cv):
     THRESH_LOW(265.0),
     THRESH_HIGH(3125.0),
-    pVolts(voltage)
+    pVolts(voltage),
+    pCV(cv)
   { ; }
 
   bool stochasticize(bool startVal)
@@ -49,11 +52,19 @@ struct Stochasticizer
     float prob(pVolts->readMiliVolts());
     if (prob > THRESH_HIGH)
     {
+      if (pCV->readMiliVolts() > 500)
+      {
+        return !startVal;
+      }
       return startVal;
     }
 
     if (prob < THRESH_LOW)
     {
+      if (pCV->readMiliVolts() > 500)
+      {
+        return !startVal;
+      }
       return !startVal;
     }
 
@@ -72,14 +83,15 @@ class TuringRegister
 {
 public:
   TuringRegister(
-    ESP32AnalogRead *voltage):
+    ESP32AnalogRead *voltage,
+    ESP32AnalogRead *cv):
     locked_         (0),
     inReverse_      (0),
     offset_         (0),
     resetPending_   (0),
     workingRegister (0),
     stepCountIdx_   (6),
-    stoch_(Stochasticizer(voltage)),
+    stoch_(Stochasticizer(voltage, cv)),
     NUM_PATTERNS    (8),
     currentPattern_ (0),
     nextPattern_    (0)

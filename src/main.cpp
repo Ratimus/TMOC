@@ -56,7 +56,8 @@ uint8_t currentBank(0);
 // Indicates whether the current fader bank has been filled with real data
 bool faderInitValsSet[NUM_BANKS];
 
-bool reverse(0);
+bool shift(0);
+
 bool set_bit_0(0);
 bool clear_bit_0(0);
 
@@ -66,7 +67,7 @@ hw_timer_t *timer1(NULL);   // Timer library takes care of telling this where to
 DacESP32 voltsExp(static_cast<gpio_num_t>(DAC1_CV_OUT));
 
 // Core Shift Register functionality
-TuringRegister alan(&turing);
+TuringRegister alan(&turing, &cvA);
 
 // Hardware interfaces for 74HC595s
 OutputRegister<uint16_t>  leds(SR_CLK, SR_DATA, LED_SR_CS, regMap);
@@ -461,20 +462,36 @@ void turingStep(int8_t stepAmount)
 
   // Get the Turing register pattern value
   uint8_t tmpReg(alan.getOutput());
-  setDacRegister(tmpReg);
 
   // Update voltages so they are ready when the triggers update
-  expandVoltages(dacRegister);
-  setFaderRegister(dacRegister & faderLockStateReg);
+  if (!shift)
+  {
+    setDacRegister(tmpReg);
+  }
+  else
+  {
+    uint8_t len(alan.getLength());
+    if (len <= 8)
+    {
+      setDacRegister(0x01 << len);
+    }
+    else
+    {
+      setDacRegister(~(0x01 << (len - 8)));
+    }
+  }
 
-  uint8_t trigReg(pulseIt(alanStep, dacRegister));
+  expandVoltages(tmpReg);
+  setFaderRegister(tmpReg & faderLockStateReg);
+
+  uint8_t trigReg(pulseIt(alanStep, tmpReg));
   setTrigRegister(trigReg);
 
   leds.clock();
   triggers.clock();
 
   print("register:  ");
-  printBits(dacRegister);
+  printBits(tmpReg);
   print("output  :  ");
   printBits(trigReg);
 }
@@ -486,23 +503,29 @@ void handleEncoder()
   switch(encoderInterface.getEvent())
   {
     case encEvnts :: DblClick:
-      set_bit_0 = true;
+      shift = !shift;
       // printf("LENGTH: %u\n", alan.getLength());
       break;
 
     case encEvnts :: Click:
-      clear_bit_0 = true;
+      alan.reset();
       break;
 
     case encEvnts :: Hold:
       break;
 
     case encEvnts :: Right:
-      if (CASSIDEBUG) turingStep(1);
+      if (shift)
+      {
+        alan.lengthPLUS();
+      }
       break;
 
     case encEvnts :: Left:
-      if (CASSIDEBUG) turingStep(-1);
+      if (shift)
+      {
+        alan.lengthMINUS();
+      }
       break;
 
     case encEvnts :: Press:
@@ -512,9 +535,11 @@ void handleEncoder()
       break;
 
     case encEvnts :: ShiftLeft:
+      if (CASSIDEBUG) printf("cv a: %u\n", cvA.readRaw());
       break;
 
     case encEvnts :: ShiftRight:
+      if (CASSIDEBUG) printf("cv b: %u\n", cvB.readRaw());
       break;
 
     case encEvnts :: NUM_ENC_EVNTS:
@@ -528,8 +553,17 @@ void handleEncoder()
 
 void loop()
 {
+  ButtonState clickies[]{ writeLow.readAndFree(), writeHigh.readAndFree() };
   if (checkClockFlag() == 1)
   {
+    if (clickies[0] == ButtonState :: Held)
+    {
+      clear_bit_0 = true;
+    }
+    else if(clickies[1] == ButtonState :: Held)
+    {
+      set_bit_0 = true;
+    }
     turingStep((cvB.readRaw() > 2047) ? -1 : 1);
   }
   else if (checkClockFlag() == -1)
@@ -537,7 +571,6 @@ void loop()
     triggers.allOff();
   }
 
-  ButtonState clickies[]{ writeLow.readAndFree(), writeHigh.readAndFree() };
 
   // Double-click to change fader octave range (1 to 3 octaves)
   if ((OctaveRange > 1) && (clickies[0] == ButtonState :: DoubleClicked))
@@ -545,8 +578,7 @@ void loop()
     --OctaveRange;
     faderLocksChanged = true;
   }
-
-  if ((OctaveRange < 3) && (clickies[1] == ButtonState :: DoubleClicked))
+  else if ((OctaveRange < 3) && (clickies[1] == ButtonState :: DoubleClicked))
   {
     ++OctaveRange;
     faderLocksChanged = true;
@@ -562,29 +594,30 @@ void loop()
         (pCV + fd)->overWrite();
         faderInitValsSet[OctaveRange - 1] = true;
       }
-      bitWrite(faderLockStateReg, fd, (pCV + fd)->pACTIVE->getLockState() == LockState :: STATE_UNLOCKED);
+      bitWrite(faderLockStateReg,
+               fd,
+               (pCV + fd)->pACTIVE->getLockState() == LockState :: STATE_UNLOCKED);
     }
 
     faderLocksChanged = false;
   }
 
-  // Single click to change pattern length
+  // Single click to set/clear BIT0
   if (clickies[0] == ButtonState :: Clicked)
   {
-    alan.lengthMINUS();
-    printf("LENGTH: %u\n", alan.getLength());
+      clear_bit_0 = true;
   }
-
-  if (clickies[1] == ButtonState :: Clicked)
+  else if (clickies[1] == ButtonState :: Clicked)
   {
-    alan.lengthPLUS();
-    printf("LENGTH: %u\n", alan.getLength());
+    set_bit_0 = true;
   }
 
   for (uint8_t fd = 0; fd < NUM_FADERS; ++fd)
   {
     (pCV + fd)->readActiveCtrl();
-    bitWrite(faderLockStateReg, fd, (pCV + fd)->pACTIVE->getLockState() == LockState :: STATE_UNLOCKED);
+    bitWrite(faderLockStateReg,
+             fd,
+             (pCV + fd)->pACTIVE->getLockState() == LockState :: STATE_UNLOCKED);
     leds.tempWrite(dacRegister & faderLockStateReg);
   }
 
