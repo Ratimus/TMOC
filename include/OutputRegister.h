@@ -38,14 +38,18 @@ template <typename T>
   class OutputRegister : public latchable<T>
 {
 public:
-  OutputRegister(uint8_t clkPin, uint8_t dataPin, uint8_t csPin, const uint8_t mapping[]):
-  latchable<T>(T(0)),
-  CLK(clkPin),
-  DAT(dataPin),
-  LCH(csPin),
-  MAP(mapping),
-  BYTE_COUNT(sizeof(T)),
-  NUM_BITS(sizeof(T) * 8)
+  OutputRegister(
+    uint8_t clkPin,
+    uint8_t dataPin,
+    uint8_t csPin,
+    const uint8_t mapping[]):
+      latchable<T>(T(0)),
+      CLK(clkPin),
+      DAT(dataPin),
+      LCH(csPin),
+      MAP(mapping),
+      BYTE_COUNT(sizeof(T)),
+      NUM_BITS(sizeof(T) * 8)
   {
     SR = new FastShiftOut(DAT, CLK, LSBFIRST);
   }
@@ -90,7 +94,7 @@ public:
   void setReg(uint8_t val, uint8_t bytenum = 0)
   {
     T setVal(T(val) << (8 * bytenum));
-    T mask(T(0xFF) << (8 * bytenum));
+    T mask(T(0xFF)  << (8 * bytenum));
     T temp(D() & ~mask);
     temp |= setVal;
     latchable<T> :: set(temp);
@@ -119,13 +123,13 @@ public:
   }
 
 protected:
-  const uint8_t CLK;
-  const uint8_t DAT;
-  const uint8_t LCH;
+  const uint8_t  CLK;
+  const uint8_t  DAT;
+  const uint8_t  LCH;
   const uint8_t *MAP;
-  const uint8_t NUM_BITS;
-  const size_t BYTE_COUNT;
-  FastShiftOut *SR;
+  const uint8_t  NUM_BITS;
+  const size_t   BYTE_COUNT;
+  FastShiftOut  *SR;
 
   void writeOutputRegister()
   {

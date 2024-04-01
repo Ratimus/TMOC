@@ -5,8 +5,10 @@
 #include "MCP_ADC.h"
 #include "Latchable.h"
 
-// Unlock knob when within this percent difference from the lock value
+// Maximum number of samples to average (higher values smooth noise)
 static const uint8_t MAX_BUFFER_SIZE(128);
+
+// Unlock knob when within this percent difference from the lock value
 static const double  DEFAULT_THRESHOLD(0.05);
 
 ////////////////////////////////////////////////
@@ -28,19 +30,22 @@ public:
 
 ////////////////////////////////////////////////
 //
- explicit HardwareCtrl(MCP3208* inAdc, uint8_t inCh,
-                       uint8_t numSamps = 1) :
-    pADC(inAdc),
-    ch(inCh),
-    adcMax(pADC->maxValue()),
-    buffSize(constrain(numSamps, 1, MAX_BUFFER_SIZE-1)),
-    sampleIdx(0),
-    sum(0),
+ explicit HardwareCtrl(
+  MCP3208* inAdc,
+  uint8_t inCh,
+  uint8_t numSamps = 1):
+    pADC       (inAdc),
+    ch         (inCh),
+    adcMax     (pADC->maxValue()),
+    buffSize   (constrain(numSamps, 1, MAX_BUFFER_SIZE-1)),
+    sampleIdx  (0),
+    sum        (0),
     bufferReady(false)
   {
     cli();
     for (uint8_t ii = 0; ii < MAX_BUFFER_SIZE; ++ii)
     {
+      // Fill buffer so we already have a good average to start with
       buff[ii] = pADC->analogRead(ch);
     }
     sampleIdx = buffSize;
@@ -57,6 +62,7 @@ public:
     }
 
     cli();
+    // Add one sample to the buffer
     buff[sampleIdx] = pADC->analogRead(ch);
     ++sampleIdx;
     if (sampleIdx >= buffSize)
@@ -71,6 +77,7 @@ public:
   //
   bool isReady()
   {
+    // Report 'ready' if buffer is full
     bool retVal;
     cli();
     retVal = bufferReady;
@@ -80,7 +87,7 @@ public:
 
   ////////////////////////////////////////////////
   //
-  // Get the value of the current reading
+  // Get the (smoothed) raw ADC value
   virtual int16_t read()
   {
     uint8_t samps;
@@ -88,6 +95,7 @@ public:
     sum = 0;
 
     cli();
+    // Buffer isn't full; just return the first sample
     if (!bufferReady)
     {
       samps  = 0;
@@ -104,6 +112,7 @@ public:
       return retVal;
     }
 
+    // Take the mean of all samples in the buffer
     for (uint8_t ii = 0; ii < buffSize; ++ii)
     {
       cli();
@@ -134,7 +143,10 @@ enum LockState
 
 
 ////////////////////////////////////////////////
+//
 // Defines a control that can be locked and unlocked
+// You probably won't instantiate one of these directly. Rather,
+// you'll create a VirtualControl (which extends this class).
 class LockingCtrl
 {
   friend class ModalCtrl;
@@ -216,6 +228,7 @@ protected:
 
   ////////////////////////////////////////////////
   //
+  // Returns current ADC reading if unlocked, else returns locked value
   virtual int16_t sample()
   {
     // Check current state
@@ -279,6 +292,7 @@ protected:
 
   ////////////////////////////////////////////////
   //
+  // Locks the control at its current value if it isn't already locked
   bool lock()
   {
     LockState tmpState;
@@ -302,6 +316,7 @@ protected:
 
   ////////////////////////////////////////////////
   //
+  // Activates the control; it can now be unlocked
   void reqUnlock()
   {
     LockState tmpState;
@@ -320,12 +335,12 @@ protected:
 ////////////////////////////////////////////////////////////////////////
 // VIRTUAL CTRL
 ////////////////////////////////////////////////////////////////////////
-// Wraps a raw LockingControl to return a limited number of options rather
+// Inherits from LockingControl; returns a limited number of options rather
 // than a raw ADC value and uses hysteresis to prevent erratic mode-switching
 class VirtualCtrl : public LockingCtrl
 {
-  const int16_t* loVal;
-  const int16_t* hiVal;
+  const int16_t* pMin;
+  const int16_t* pMax;
 
   const bool pointsOut;
 
@@ -340,18 +355,25 @@ public:
 
   ////////////////////////////////////////////////
   //
-  explicit VirtualCtrl(HardwareCtrl* inCtrl,
-              int16_t inSlice,
-              int16_t inHI,
-              int16_t inLO         = 0,
-              bool    createLocked = true):
-    LockingCtrl(inCtrl, inSlice, true),
-  hi(inHI),
-  lo(inLO),
-  pointsOut(false),
-  hiVal(&hi),
-  loVal(&lo),
-  lockSlice(inSlice)
+  // Constructor for Virtual Control with inward-pointing min/max (i.e. range is defined
+  // as part of this instance rather than as external pointers)
+  // Inward-pointing limits
+  explicit VirtualCtrl(
+    HardwareCtrl* inCtrl,
+    int16_t inSlice,
+    int16_t inHI,
+    int16_t inLO         = 0,
+    bool    createLocked = true):
+      LockingCtrl(
+        inCtrl,
+        inSlice,
+        true),
+      hi(inHI),
+      lo(inLO),
+      pointsOut(false),
+      pMax(&hi),
+      pMin(&lo),
+      lockSlice(inSlice)
   {
     if (createLocked)
     {
@@ -361,20 +383,24 @@ public:
 
   ////////////////////////////////////////////////
   //
-  explicit VirtualCtrl(HardwareCtrl* inCtrl,
-              int16_t  inSlice,
-              int16_t* inHI,
-              int16_t  hiOFFSET     = -1,
-              int16_t* inLO         = sharedZERO,
-              int16_t  loOFFSET     = 0,
-              bool     createLocked = true):
-    LockingCtrl(inCtrl, inSlice, true),
-  hi(hiOFFSET),
-  lo(loOFFSET),
-  pointsOut(true),
-  hiVal(inHI),
-  loVal(inLO),
-  lockSlice(inSlice)
+  explicit VirtualCtrl(
+    HardwareCtrl* inCtrl,
+    int16_t  inSlice,
+    int16_t* inHI,
+    int16_t  hiOFFSET     = -1,
+    int16_t* inLO         = sharedZERO,
+    int16_t  loOFFSET     = 0,
+    bool     createLocked = true):
+      LockingCtrl(
+        inCtrl,
+        inSlice,
+        true),
+      hi(hiOFFSET),
+      lo(loOFFSET),
+      pointsOut(true),
+      pMax(inHI),
+      pMin(inLO),
+      lockSlice(inSlice)
   {
     if (createLocked)
     {
@@ -387,6 +413,7 @@ public:
     lockSlice = slice;
     LockingCtrl :: jam(sliceToVal(lockSlice));
   }
+
   ////////////////////////////////////////////////
   //
   void updateRange(int16_t inHI, int16_t inLO = 0)
@@ -399,10 +426,10 @@ public:
   //
   int16_t sliceToVal(int16_t tgtSlice)
   {
-    int16_t rangeHi(*hiVal + (int16_t)pointsOut * hi);
-    int16_t rangeLo(*loVal + (int16_t)pointsOut * lo);
+    int16_t rangeHi(*pMax + (int16_t)pointsOut * hi);
+    int16_t rangeLo(*pMin + (int16_t)pointsOut * lo);
 
-    int16_t tgtVal(map(tgtSlice, rangeLo, rangeHi+1, 0, adcMax+1));
+    int16_t tgtVal(map(tgtSlice, rangeLo, rangeHi + 1, 0, adcMax + 1));
     return tgtVal;
   }
 
@@ -410,10 +437,10 @@ public:
   //
   int16_t valToSlice(int16_t val)
   {
-    int16_t rangeHi(*hiVal + (int16_t)pointsOut * hi);
-    int16_t rangeLo(*loVal + (int16_t)pointsOut * lo);
+    int16_t rangeHi(*pMax + (int16_t)pointsOut * hi);
+    int16_t rangeLo(*pMin + (int16_t)pointsOut * lo);
 
-    return map(val, 0, adcMax+1, rangeLo, 1+rangeHi);
+    return map(val, 0, adcMax + 1, rangeLo, 1 + rangeHi);
   }
 
   ////////////////////////////////////////////////
@@ -439,9 +466,8 @@ public:
       return lockSlice;
     }
 
-
-    int16_t rangeHi(*hiVal + (int16_t)pointsOut * hi);
-    int16_t rangeLo(*loVal + (int16_t)pointsOut * lo);
+    int16_t rangeHi(*pMax + (int16_t)pointsOut * hi);
+    int16_t rangeLo(*pMin + (int16_t)pointsOut * lo);
 
     int16_t tmpVal(pCTRL->read());
     int16_t tmpSlice(valToSlice(tmpVal));
@@ -454,7 +480,7 @@ public:
         state = STATE_UNLOCKED;
         sei();
         // Serial.printf("%p LOCK->UNLOCK; slice: %d, lockSlice: %d, val: %d\n", this, tmpSlice,lockSlice, tmpVal);
-        // Serial.printf(" hiVal: %d, loVal: %d, rangeHi: %d, rangeLo: %d\n",*hiVal, *loVal, rangeHi, rangeLo);
+        // Serial.printf(" pMax: %d, loVal: %d, rangeHi: %d, rangeLo: %d\n",*pMax, *loVal, rangeHi, rangeLo);
       }
       else
       {
@@ -489,8 +515,8 @@ public:
 
 
 ////////////////////////////////////////////////
-// Defines an array of Virtual Controls that can be wrapped to produce
-// a bank of mode-dependent controls
+//
+// Defines an array of Virtual Controls based on a single hardware control
 class ArrayCtrl : public VirtualCtrl
 {
   int16_t* pARR;
@@ -501,12 +527,18 @@ public:
 
   ////////////////////////////////////////////////
   //
-  ArrayCtrl(HardwareCtrl* inCtrl,
-            int16_t*      arr, size_t count, int16_t stIdx = 0):
-    VirtualCtrl(inCtrl, stIdx, (int16_t)(count-1)),
-  pARR(arr),
-  size(count),
-  iter(stIdx)
+  ArrayCtrl(
+    HardwareCtrl* inCtrl,
+    int16_t*      arr,
+    size_t count,
+    int16_t stIdx = 0):
+      VirtualCtrl(
+        inCtrl,
+        stIdx,
+        (int16_t)(count-1)),
+      pARR(arr),
+      size(count),
+      iter(stIdx)
   { ; }
 
   ////////////////////////////////////////////////
@@ -527,6 +559,8 @@ public:
 
 ////////////////////////////////////////////////
 //
+// Manager class to serve as a single point of interaction for an array of virtual controls
+// in which only one virtual control is active at a time
 class ModalCtrl
 {
   uint8_t numModes;

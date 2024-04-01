@@ -22,7 +22,14 @@ HardwareCtrl Fader8 = HardwareCtrl(pADC0, 7, SAMPLE_BUFFER_SIZE);
 
 HardwareCtrl* pFaders[NUM_FADERS] =
 {
-  &Fader1, &Fader2, &Fader3, &Fader4, &Fader5, &Fader6, &Fader7, &Fader8
+  &Fader1,
+  &Fader2,
+  &Fader3,
+  &Fader4,
+  &Fader5,
+  &Fader6,
+  &Fader7,
+  &Fader8
 };
 
 

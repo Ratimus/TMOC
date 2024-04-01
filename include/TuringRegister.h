@@ -20,32 +20,48 @@ struct Stochasticizer
   Stochasticizer(
     ESP32AnalogRead * voltage,
     ESP32AnalogRead * cv):
-    THRESH_LOW(265.0),
-    THRESH_HIGH(3125.0),
-    pVolts(voltage),
-    pCV(cv)
+      THRESH_LOW(265.0),
+      THRESH_HIGH(3125.0),
+      pVolts(voltage),
+      pCV(cv)
   { ; }
 
   bool stochasticize(bool startVal)
   {
     // CASSIDEBUG: add this stuff some day, maybe?
     // int decide = random(1, 511);  // and a random integer (1:510)
-    // TuringCurve = floor(512.0 * (1.0 - cos((1.0 * pVolts->readMiliVolts()) * 3.1412 / 1024.0)));
-    //
-    // if (Turing >= 512) { // Here, we're in the right-hand side of the TURING control
-    //   if (decide < 1024 - TuringCurve) { // compare the random variable 'decide' with 1024-Turing Curve ; if it's smaller
-    //     gates[0] = randgate;             // randomise gate 0
+    // int Turing(pVolts->readMiliVolts());
+    // static float someConst(3.1412 / 1024.0);
+    // int TuringCurve = floor(512.0 * (1.0 - cos(((float)Turing) * someConst)));
+
+    // if (Turing >= 512)
+    // {
+    //   // Here, we're in the right-hand side of the TURING control
+    //   if (decide < 1024 - TuringCurve)
+    //   {
+    //     // compare the random variable 'decide' with 1024-Turing Curve
+    //     // if it's smaller, randomise gate 0
+    //     gates[0] = randgate;
     //   }
-    //   else {                             // otherwise,
-    //     gates[0] = (gatecarry);          // feedback the bit from the selected point in the shift register into gate 0
+    //   else
+    //   {
+    //     // feedback the bit from the selected point in the shift register into gate 0
+    //     gates[0] = (gatecarry);
     //   }
     // }
-    // else {              // Here, we're in the left-hand side of the TURING control
-    //   if (decide < TuringCurve) {    // compare the random variable 'decide' with Turing Curve ; if it's smaller
-    //     gates[0] = randgate;         // randomise gate 0
+    // else
+    // {
+    //   // Here, we're in the left-hand side of the TURING control
+    //   if (decide < TuringCurve)
+    //   {
+    //     // compare the random variable 'decide' with Turing Curve
+    //     // if it's smaller, randomise gate 0
+    //     gates[0] = randgate;
     //   }
-    //   else {                         // otherwise,
-    //     gates[0] = not(gatecarry);   // feedback the complement of the bit from the selected point in the shift register into gate 0
+    //   else
+    //   {
+    //     // feedback the complement of the bit from the selected point in the shift register into gate 0
+    //     gates[0] = not(gatecarry);
     //   }
     // }
 
@@ -63,7 +79,7 @@ struct Stochasticizer
     {
       if (pCV->readMiliVolts() > 500)
       {
-        return !startVal;
+        return startVal;
       }
       return !startVal;
     }
@@ -85,25 +101,25 @@ public:
   TuringRegister(
     ESP32AnalogRead *voltage,
     ESP32AnalogRead *cv):
-    locked_         (0),
-    inReverse_      (0),
-    offset_         (0),
-    resetPending_   (0),
-    workingRegister (0),
-    stepCountIdx_   (6),
-    stoch_(Stochasticizer(voltage, cv)),
-    NUM_PATTERNS    (8),
-    currentPattern_ (0),
-    nextPattern_    (0)
+      locked_         (0),
+      inReverse_      (0),
+      offset_         (0),
+      resetPending_   (0),
+      workingRegister (0),
+      stepCountIdx_   (6),
+      stoch_(Stochasticizer(voltage, cv)),
+      NUM_PATTERNS    (8),
+      currentPattern_ (0),
+      nextPattern_    (0)
   {
-    pLengthArray_ = new uint8_t [NUM_PATTERNS];
+    pLengthArray_   = new uint8_t [NUM_PATTERNS];
     for (uint8_t bk(0); bk < NUM_PATTERNS; ++bk)
     {
       *(pLengthArray_ + bk) = STEP_LENGTH_VALS[stepCountIdx_];
     }
-    pLength_      = pLengthArray_;
-    pPatternBank  = new uint16_t [NUM_PATTERNS];
-    pShiftReg_    = pPatternBank;
+    pLength_        = pLengthArray_;
+    pPatternBank    = new uint16_t [NUM_PATTERNS];
+    pShiftReg_      = pPatternBank;
     workingRegister = *pShiftReg_;
   }
 
@@ -161,7 +177,8 @@ public:
       writeVal = stoch_.stochasticize(writeVal);
     }
 
-    workingRegister = (workingRegister << leftAmt) | (workingRegister >> rightAmt);
+    workingRegister = (workingRegister << leftAmt) | \
+                      (workingRegister >> rightAmt);
     bitWrite(workingRegister, writeIdx, writeVal);
 
     uint8_t retVal(offset_);
@@ -179,11 +196,13 @@ public:
   {
     if (offset_ > 0)
     {
-      workingRegister = (workingRegister >> offset_) | (workingRegister << (16 - offset_));
+      workingRegister = (workingRegister >> offset_) | \
+                        (workingRegister << (16 - offset_));
     }
     else if (offset_ < 0)
     {
-      workingRegister = (workingRegister << -offset_) | (workingRegister >> (16 + offset_));
+      workingRegister = (workingRegister << -offset_) | \
+                        (workingRegister >> (16 + offset_));
     }
     resetPending_ = true;
   }
@@ -192,11 +211,13 @@ public:
   {
     if (offset_ > 0)
     {
-      workingRegister = (workingRegister << offset_) | (workingRegister >> (16 - offset_));
+      workingRegister = (workingRegister << offset_) | \
+                        (workingRegister >> (16 - offset_));
     }
     else if (offset_ < 0)
     {
-      workingRegister = (workingRegister >> -offset_) | (workingRegister << (16 + offset_));
+      workingRegister = (workingRegister >> -offset_) | \
+                        (workingRegister << (16 + offset_));
     }
   }
 
@@ -260,8 +281,8 @@ public:
     // flag if it wasn't already
     bool pr(resetPending_);
     reset();
-    resetPending_ = pr;
-    *pShiftReg_   = workingRegister;
+    resetPending_   = pr;
+    *pShiftReg_     = workingRegister;
 
     // Move pattern pointer to selected bank and copy it into working register
     currentPattern_ = bankIdx % NUM_PATTERNS;
@@ -278,7 +299,7 @@ public:
     // Rotate working register to step 0
     bool pr(resetPending_);
     reset();
-    resetPending_ = pr;
+    resetPending_   = pr;
 
     // Move pattern pointer to the selected bank and copy working register into it
     currentPattern_ = bankIdx % NUM_PATTERNS;
@@ -314,11 +335,13 @@ protected:
     // Rotate the new pattern to the current step
     if (offset_ > 0)
     {
-      *pShiftReg_ = (*pShiftReg_ << offset_) | (*pShiftReg_ >> (16 - offset_));
+      *pShiftReg_ = (*pShiftReg_ << offset_) | \
+                    (*pShiftReg_ >> (16 - offset_));
     }
     else if (offset_ < 0)
     {
-      *pShiftReg_ = (*pShiftReg_ >> -offset_) | (*pShiftReg_ << (16 + offset_));
+      *pShiftReg_ = (*pShiftReg_ >> -offset_) | \
+                    (*pShiftReg_ << (16 + offset_));
     }
   }
 };

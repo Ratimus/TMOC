@@ -403,7 +403,7 @@ void expandVoltages(uint8_t shiftReg)
     writeRawValToDac(ch, val);
   }
 
-  uint8_t jnkm(~dacRegister);
+  uint8_t jnkm(~shiftReg);
   voltsExp.outputVoltage(jnkm);
   printf("Jank : %u\n", jnkm);
 }
@@ -411,20 +411,12 @@ void expandVoltages(uint8_t shiftReg)
 
 uint8_t pulseIt(int8_t step, uint8_t inputReg)
 {
-  // Bit 0 from shift register bit 0
+  // Bit 0 from shift register; Bit 1 is !Bit 0
   uint8_t outputReg(inputReg & BIT0);
-
-  // Bit 1 is !Bit 0
   outputReg |= (~outputReg << 1) & BIT1;
 
-  // Bit 2 is high if register value is >= some random number
-  if (random() % 256 <= inputReg)
-  {
-    outputReg |= BIT2;
-  }
-
-  // Bit 3 is !Bit2
-  outputReg |= (~outputReg << 1) & BIT3;
+  outputReg |= ((((inputReg & BIT0) >> 0) & ((inputReg & BIT3) >> 3)) << 2) & BIT2;
+  outputReg |= ((((inputReg & BIT2) >> 2) & ((inputReg & BIT7) >> 7)) << 3) & BIT3;
 
   outputReg |= (((inputReg & BIT1) >> 1) ^ ((inputReg & BIT6) >> 6) << 4) & BIT4;
   outputReg |= (((inputReg & BIT0) >> 0) ^ ((inputReg & BIT4) >> 4) << 5) & BIT5;
@@ -473,11 +465,11 @@ void turingStep(int8_t stepAmount)
     uint8_t len(alan.getLength());
     if (len <= 8)
     {
-      setDacRegister(0x01 << len);
+      setDacRegister(0x01 << (len - 1));
     }
     else
     {
-      setDacRegister(~(0x01 << (len - 8)));
+      setDacRegister(~(0x01 << (len - 9)));
     }
   }
 
@@ -515,17 +507,11 @@ void handleEncoder()
       break;
 
     case encEvnts :: Right:
-      if (shift)
-      {
-        alan.lengthPLUS();
-      }
+      alan.lengthPLUS();
       break;
 
     case encEvnts :: Left:
-      if (shift)
-      {
-        alan.lengthMINUS();
-      }
+      alan.lengthMINUS();
       break;
 
     case encEvnts :: Press:
