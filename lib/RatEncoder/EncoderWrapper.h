@@ -1,9 +1,15 @@
+// ------------------------------------------------------------------------
+// EncoderWrapper.h
+//
+// Nov. 2022
+// Ryan "Ratimus" Richardson
+// ------------------------------------------------------------------------
 #ifndef EncoderWrapper_H
 #define EncoderWrapper_H
 
 #include <Arduino.h>
 #include "ClickEncoderInterface.h"
-#include <RatRotaryEvent.h>
+#include <RotaryEvent.h>
 
 namespace Menu
 {
@@ -12,14 +18,14 @@ class EncoderWrapper : public menuIn
 private:
 
   ClickEncoderInterface &EI;
-  RatRotaryEvent &REI;
+  RotaryEvent &REI;
   encEvnts _evt;
 
 public:
 
   EncoderWrapper(
     ClickEncoderInterface &EncoderInterface,
-    RatRotaryEvent &Rotary) :
+    RotaryEvent &Rotary) :
   EI(EncoderInterface),
   REI(Rotary),
   _evt(encEvnts::NUM_ENC_EVNTS)

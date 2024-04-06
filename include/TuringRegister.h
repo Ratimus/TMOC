@@ -1,3 +1,9 @@
+// ------------------------------------------------------------------------
+// TuringRegister.h
+//
+// December 2023
+// Ryan "Ratimus" Richardson
+// ------------------------------------------------------------------------
 #ifndef TURING_REGISTER_DOT_AITCH
 #define TURING_REGISTER_DOT_AITCH
 

@@ -1,3 +1,9 @@
+// ------------------------------------------------------------------------
+// RatFuncs.cpp
+//
+// Oct. 2022
+// Ryan "Ratimus" Richardson
+// ------------------------------------------------------------------------
 #include "RatFuncs.h"
 
 //////////////////////////////////////////////////////////////////
@@ -89,7 +95,7 @@ int16_t wrapConstrain(int16_t N, int16_t dN, int16_t nMin, int16_t nMax)
 int16_t wrapConstrain(int16_t N, int16_t nMin, int16_t nMax)
 {
   if ((nMin <= N) && (N <= nMax)) { return N; }
-  
+
   int16_t range = nMax - nMin + 1;
   if (range == 0) { return nMax; }
   N = ((N - nMin) % range);

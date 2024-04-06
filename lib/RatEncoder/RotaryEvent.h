@@ -1,7 +1,7 @@
 /* -*- C++ -*- */
 /**************
 
-RatRotaryEvent.h
+RotaryEvent.h
 
 March 2020 M. Smit - github@gangkast.nl
 Generic Rotary/Button input
@@ -33,7 +33,7 @@ template<class T> inline T& operator&= (T& a, T b) { return (T&)((int&)a &= (int
 template<class T> inline T& operator^= (T& a, T b) { return (T&)((int&)a ^= (int)b); }
 
 
-    class RatRotaryEvent:public menuIn {
+    class RotaryEvent:public menuIn {
 
       public:
 
@@ -49,7 +49,7 @@ template<class T> inline T& operator^= (T& a, T b) { return (T&)((int&)a ^= (int
         EventType config;
         EventType events;  // we could do a fifo if we miss events
 
-        RatRotaryEvent(EventType c)
+        RotaryEvent(EventType c)
           :config(c),events(ROTARY_NONE) {
           // config for future use. we could raise if
           // we are missing essential stuff

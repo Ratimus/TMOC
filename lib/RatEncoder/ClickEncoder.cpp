@@ -6,7 +6,7 @@
 // Ryan "Ratimus" Richardson
 // Nov. 2022
 // ----------------------------------------------------------------------------
-// Based heavily on work by:
+// Based on work by:
 // (c) 2010 karl@pitrich.com
 // (c) 2014 karl@pitrich.com
 //

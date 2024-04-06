@@ -1,3 +1,9 @@
+// ------------------------------------------------------------------------
+// OutputRegister.h
+//
+// December 2023
+// Ryan "Ratimus" Richardson
+// ------------------------------------------------------------------------
 #ifndef OUTPUT_REGISTER_DOT_AITCH
 #define OUTPUT_REGISTER_DOT_AITCH
 #include <Arduino.h>
