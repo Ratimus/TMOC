@@ -339,25 +339,19 @@ protected:
 // than a raw ADC value and uses hysteresis to prevent erratic mode-switching
 class VirtualCtrl : public LockingCtrl
 {
-  const int16_t* pMin;
-  const int16_t* pMax;
-
-  const bool pointsOut;
-
-  int16_t lo;
-  int16_t hi;
-
+  int16_t minSlice;
+  int16_t maxSlice;
   int16_t lockSlice;
 
 public:
 
   static int16_t * sharedZERO;
 
+  int16_t getMin() { return minSlice; }
+  int16_t getMax() { return maxSlice; }
   ////////////////////////////////////////////////
   //
-  // Constructor for Virtual Control with inward-pointing min/max (i.e. range is defined
-  // as part of this instance rather than as external pointers)
-  // Inward-pointing limits
+  // Constructor
   explicit VirtualCtrl(
     HardwareCtrl* inCtrl,
     int16_t inSlice,
@@ -368,38 +362,8 @@ public:
         inCtrl,
         inSlice,
         true),
-      hi(inHI),
-      lo(inLO),
-      pointsOut(false),
-      pMax(&hi),
-      pMin(&lo),
-      lockSlice(inSlice)
-  {
-    if (createLocked)
-    {
-      jam(lockSlice);
-    }
-  }
-
-  ////////////////////////////////////////////////
-  //
-  explicit VirtualCtrl(
-    HardwareCtrl* inCtrl,
-    int16_t  inSlice,
-    int16_t* inHI,
-    int16_t  hiOFFSET     = -1,
-    int16_t* inLO         = sharedZERO,
-    int16_t  loOFFSET     = 0,
-    bool     createLocked = true):
-      LockingCtrl(
-        inCtrl,
-        inSlice,
-        true),
-      hi(hiOFFSET),
-      lo(loOFFSET),
-      pointsOut(true),
-      pMax(inHI),
-      pMin(inLO),
+      maxSlice(inHI),
+      minSlice(inLO),
       lockSlice(inSlice)
   {
     if (createLocked)
@@ -418,29 +382,31 @@ public:
   //
   void updateRange(int16_t inHI, int16_t inLO = 0)
   {
-    hi = inHI;
-    lo = inLO;
+    LockState currentState();
+    bool wasLocked(getLockState() == LockState :: STATE_LOCKED);
+    lock();
+    minSlice = inLO;
+    maxSlice = inHI;
+    if (wasLocked)
+    {
+      return;
+    }
+
+    reqUnlock();
   }
 
   ////////////////////////////////////////////////
   //
   int16_t sliceToVal(int16_t tgtSlice)
   {
-    int16_t rangeHi(*pMax + (int16_t)pointsOut * hi);
-    int16_t rangeLo(*pMin + (int16_t)pointsOut * lo);
-
-    int16_t tgtVal(map(tgtSlice, rangeLo, rangeHi + 1, 0, adcMax + 1));
-    return tgtVal;
+    return map(tgtSlice, minSlice, maxSlice + 1, 0, adcMax + 1);
   }
 
   ////////////////////////////////////////////////
   //
   int16_t valToSlice(int16_t val)
   {
-    int16_t rangeHi(*pMax + (int16_t)pointsOut * hi);
-    int16_t rangeLo(*pMin + (int16_t)pointsOut * lo);
-
-    return map(val, 0, adcMax + 1, rangeLo, 1 + rangeHi);
+    return map(val, 0, adcMax + 1, minSlice, maxSlice + 1);
   }
 
   ////////////////////////////////////////////////
@@ -465,9 +431,6 @@ public:
       // Serial.printf("    %p ADC not ready! lock val = %u\n", this, lockSlice);
       return lockSlice;
     }
-
-    int16_t rangeHi(*pMax + (int16_t)pointsOut * hi);
-    int16_t rangeLo(*pMin + (int16_t)pointsOut * lo);
 
     int16_t tmpVal(pCTRL->read());
     int16_t tmpSlice(valToSlice(tmpVal));
@@ -656,6 +619,21 @@ public:
     // Serial.println("    reqUnlock");
     pACTIVE->reqUnlock();
     // Serial.printf("    lock val: %u\n", pACTIVE->getLockVal());
+  }
+
+  void setRange(uint8_t mode, int16_t max, int16_t min = 0)
+  {
+    ctrlOBJECTS[mode]->updateRange(max, min);
+  }
+
+  void copySettings(uint8_t dest, int8_t source = -1)
+  {
+    if (source < 0)
+    {
+      source = selMode;
+    }
+    ctrlOBJECTS[dest]->jam(ctrlOBJECTS[source]->sample());
+    ctrlOBJECTS[dest]->updateRange(ctrlOBJECTS[source]->getMax(),  ctrlOBJECTS[source]->getMin());
   }
 };
 

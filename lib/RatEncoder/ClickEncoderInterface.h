@@ -49,7 +49,7 @@ public:
   ClickEncoderInterface(ClickEncoder &rEnc, int sense);
 
   encEvnts getEvent(void);
-  
+
   inline void setSensivity(int s) { sensivity = s; }
 
   void flush()

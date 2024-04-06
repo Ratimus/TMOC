@@ -28,7 +28,7 @@ struct Stochasticizer
 
   bool stochasticize(bool startVal)
   {
-    // CASSIDEBUG: add this stuff some day, maybe?
+    // TODO: add this stuff some day, maybe?
     // int decide = random(1, 511);  // and a random integer (1:510)
     // int Turing(pVolts->readMiliVolts());
     // static float someConst(3.1412 / 1024.0);
