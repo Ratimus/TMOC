@@ -35,7 +35,7 @@ protected:
 public:
 
 ////////////////////////////////////////////////
-//
+// Constructor
  explicit HardwareCtrl(
   MCP3208* inAdc,
   uint8_t inCh,
@@ -59,7 +59,7 @@ public:
   }
 
   ////////////////////////////////////////////////
-  //
+  // Call this in an ISR at like 1ms or something
   void service()
   {
     if (pADC == NULL)
@@ -80,10 +80,9 @@ public:
   }
 
   ////////////////////////////////////////////////
-  //
+  // Report 'ready' if buffer is full
   bool isReady()
   {
-    // Report 'ready' if buffer is full
     bool retVal;
     cli();
     retVal = bufferReady;
@@ -92,7 +91,6 @@ public:
   }
 
   ////////////////////////////////////////////////
-  //
   // Get the (smoothed) raw ADC value
   virtual int16_t read()
   {
@@ -130,7 +128,7 @@ public:
   }
 
   ////////////////////////////////////////////////
-  //
+  // Get the highest value the ADC can return
   virtual int16_t maxValue()
   {
     return adcMax;
@@ -139,7 +137,10 @@ public:
 
 
 ////////////////////////////////////////////////
-//
+// UNLOCKED:         control value is whatever the current reading is
+// UNLOCK_REQUESTED: control will unlock if/when current reading matches lock value,
+//                   else it returns lock value
+// LOCKED:           ignore vurrent reading and return lock value
 enum LockState
 {
   STATE_UNLOCKED = 0,
@@ -149,7 +150,6 @@ enum LockState
 
 
 ////////////////////////////////////////////////
-//
 // Defines a control that can be locked and unlocked
 // You probably won't instantiate one of these directly. Rather,
 // you'll create a VirtualControl (which extends this class).
@@ -169,7 +169,7 @@ private:
 public:
 
   ////////////////////////////////////////////////
-  //
+  // Double equal all the way across the skyh
   friend bool operator== (const LockingCtrl& L1, const LockingCtrl& L2)
   {
     // Serial.printf("L1: %p;  L2: %p\n", &L1, &L2);
@@ -177,7 +177,7 @@ public:
   }
 
   ////////////////////////////////////////////////
-  //
+  // Some objects are more equal than others
   friend bool operator!= (const LockingCtrl& L1, const LockingCtrl& L2)
   {
     // Serial.printf("L1: %p;  L2: %p\n", &L1, &L2);
@@ -185,7 +185,7 @@ public:
   }
 
   ///////////////////////////////////////////////////////////////////////////////////////////////////////////
-  // (        (       (      (     (    (   (  ( (KONSTRUKTOR) )  )   )    )     )      )       )        ) //
+  // Constructor
   explicit LockingCtrl(
     HardwareCtrl* inCtrl,
     int16_t        inVal = 0,
@@ -204,14 +204,14 @@ public:
 
 
   ////////////////////////////////////////////////
-  //
+  // Get the max value the ADC is capable of returning
   int16_t maxValue()
   {
     return adcMax;
   }
 
   ////////////////////////////////////////////////
-  //
+  // Get the lock value regardles of lock state
   int16_t getLockVal()
   {
     int16_t retVal;
@@ -220,7 +220,7 @@ public:
   }
 
   ////////////////////////////////////////////////
-  //
+  // Can you guess what this does?
   LockState getLockState()
   {
     LockState tmpState;
@@ -233,7 +233,6 @@ public:
 protected:
 
   ////////////////////////////////////////////////
-  //
   // Returns current ADC reading if unlocked, else returns locked value
   virtual int16_t sample()
   {
@@ -272,7 +271,7 @@ protected:
   }
 
   ////////////////////////////////////////////////
-  //
+  // Ignore current reading, overwrite the lock value with jamVal, and lock the control
   void jam(int16_t jamVal)
   {
     bool lazy;
@@ -297,8 +296,7 @@ protected:
   }
 
   ////////////////////////////////////////////////
-  //
-  // Locks the control at its current value if it isn't already locked
+  // Lock the control at its current value if it isn't already locked
   bool lock()
   {
     LockState tmpState;
@@ -321,7 +319,6 @@ protected:
   }
 
   ////////////////////////////////////////////////
-  //
   // Activates the control; it can now be unlocked
   void reqUnlock()
   {
@@ -385,7 +382,7 @@ public:
   }
 
   ////////////////////////////////////////////////
-  //
+  // Change the range of values the control can return
   void updateRange(int16_t inHI, int16_t inLO = 0)
   {
     LockState currentState();
@@ -399,24 +396,25 @@ public:
     }
 
     reqUnlock();
+    sample();
   }
 
   ////////////////////////////////////////////////
-  //
+  // Figure out what ADC reading you'd need to match the given control value [tgtSlice]
   int16_t sliceToVal(int16_t tgtSlice)
   {
     return map(tgtSlice, minSlice, maxSlice + 1, 0, adcMax + 1);
   }
 
   ////////////////////////////////////////////////
-  //
+  // Get the control value corresponding to a given ADC value [val]
   int16_t valToSlice(int16_t val)
   {
     return map(val, 0, adcMax + 1, minSlice, maxSlice + 1);
   }
 
   ////////////////////////////////////////////////
-  //
+  // Here's how you actually get the control value during typical use
   virtual int16_t sample() override
   {
     // Check current state
@@ -453,29 +451,27 @@ public:
       }
       else
       {
+        ;
         // Serial.printf("read slice: %u, lock slice: %u\n", tmpSlice, lockSlice);
       }
 
       return lockSlice;
     }
 
+    int16_t exc;
     if(tmpSlice > lockSlice)
     {
-      int16_t exc(tmpVal - sliceToVal(tmpSlice));
-      if (exc > 50)
-      {
-        lockSlice = tmpSlice;
-        // Serial.printf("%p @ slice %d [%d] (tgt val: %d)\n", this, tmpSlice, tmpVal, sliceToVal(tmpSlice));
-      }
+      exc = (tmpVal - sliceToVal(tmpSlice));
     }
     else
     {
-      int16_t exc(sliceToVal(lockSlice) - tmpVal);
-      if (exc > 50)
-      {
-        // Serial.printf("%p @ slice %d [%d] (tgt val: %d)\n", this, tmpSlice, tmpVal, sliceToVal(lockSlice));
-        lockSlice = tmpSlice;
-      }
+      exc = (sliceToVal(tmpSlice) - tmpVal);
+    }
+
+    if (exc > 50)
+    {
+      lockSlice = tmpSlice;
+        // Serial.printf("%p @ slice %d [%d] (tgt val: %d)\n", this, tmpSlice, tmpVal, sliceToVal(tmpSlice));
     }
 
     return lockSlice;
@@ -571,7 +567,7 @@ public:
   uint16_t maxValue()   { return pACTIVE->maxValue(); }
 
   ////////////////////////////////////////////////
-  //
+  // Locks the current bank and activates sel
   uint8_t select(uint8_t sel)
   {
     selMode = sel % numModes;
@@ -623,7 +619,7 @@ public:
     // Serial.printf("val: %u, slice: %u\n", tmpVal, tmpSlice);
     jam(tmpSlice);
     // Serial.println("    reqUnlock");
-    pACTIVE->reqUnlock();
+    // pACTIVE->reqUnlock();
     // Serial.printf("    lock val: %u\n", pACTIVE->getLockVal());
   }
 
@@ -640,6 +636,8 @@ public:
     }
     ctrlOBJECTS[dest]->jam(ctrlOBJECTS[source]->sample());
     ctrlOBJECTS[dest]->updateRange(ctrlOBJECTS[source]->getMax(),  ctrlOBJECTS[source]->getMin());
+    ctrlOBJECTS[source]->reqUnlock();
+    ctrlOBJECTS[source]->sample();
   }
 };
 

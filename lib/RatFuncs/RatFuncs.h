@@ -9,6 +9,21 @@
 
 #include <Arduino.h>
 
+#ifndef CASSIDEBUG
+#define CASSIDEBUG
+#endif
+
+
+#ifdef CASSIDEBUG
+  #define dbprint Serial.print
+  #define dbprintf Serial.printf
+  #define dbprintln Serial.println
+#else
+  #define dbprint(...)
+  #define dbprintf(...)
+  #define dbprintln(...)
+#endif
+
 //////////////////////////////////////////////////////////////////
 //
 //               SERIAL DEBUGGING UTILITIES
@@ -16,6 +31,8 @@
 //////////////////////////////////////////////////////////////////
 void printBuff4x4SER(uint16_t pattBuf);
 void dumpBufferSER(uint16_t reg, bool eightBits);
+void printBits(uint8_t  val);
+void printBits(uint16_t val);
 
 //////////////////////////////////////////////////////////////////
 //

@@ -20,17 +20,17 @@ void printBuff4x4SER(uint16_t buff)
     uint8_t lclByte = buff >> (4 * lclRow);
     for (uint8_t jj = 0; jj < 4; ++jj)
     {
-      Serial.print(bitRead(lclByte, (3 - jj)) ? " 1 " : " 0 ");
+      dbprint(bitRead(lclByte, (3 - jj)) ? " 1 " : " 0 ");
     }
-    Serial.println("");
+    dbprintln("");
   }
 
-  Serial.println("============");
-  Serial.println("");
-  Serial.println("");
-  Serial.println("");
-  Serial.println("");
-  Serial.println("");
+  dbprintln("============");
+  dbprintln("");
+  dbprintln("");
+  dbprintln("");
+  dbprintln("");
+  dbprintln("");
 }
 
 void dumpBufferSER(uint16_t buff, bool eightBits /*= false*/)
@@ -44,20 +44,41 @@ void dumpBufferSER(uint16_t buff, bool eightBits /*= false*/)
       bitRead(tempReg, ii) ? Serial.print(" 1 ") : Serial.print(" 0 ");
     }
 
-    Serial.println("");
+    dbprintln("");
     return;
   }
-Serial.println("----------------");
+  dbprintln("----------------");
   for (uint8_t ii = 0; ii <16; ++ii)
   {
     bitRead(tempReg, ii) ? Serial.print("1 ") : Serial.print("0 ");
   }
 
-  Serial.println("");
+  dbprintln("");
 }
 
 
 
+// Spits out the binary representation of "val" to the serial monitor - 8 bit version
+void printBits(uint8_t  val)
+{
+  for (auto bit = 0; bit < 8; ++bit)
+  {
+    dbprint(bitRead(val, bit) ? '1' : '0');
+  }
+  dbprintln(' ');
+}
+
+
+// Spits out the binary representation of "val" to the serial monitor - 16 bit version
+void printBits(uint16_t val)
+{
+  for (auto bit = 0; bit < 16; ++bit)
+  {
+    dbprint(bitRead(val, bit) ? '1' : '0');
+    if (bit == 7) dbprint(" ");
+  }
+  dbprintln(' ');
+}
 //////////////////////////////////////////////////////////////////
 //
 //                  HW INTERFACE STUFF

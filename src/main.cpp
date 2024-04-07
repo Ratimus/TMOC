@@ -13,10 +13,13 @@
 // Nov. 2022
 // Ryan "Ratimus" Richardson
 // ------------------------------------------------------------------------
+
+// Set TRUE to enable Serial printing (and whatever else)
 #include <Arduino.h>
 #include <Wire.h>
 #include "TMOC_HW.h"
 #include "DacESP32.h"
+#include "RatFuncs.h"
 #include <CtrlPanel.h>
 #include <bitHelpers.h>
 #include <MagicButton.h>
@@ -28,11 +31,6 @@
 #include <ClickEncoderInterface.h>
 #include "ESP32_New_TimerInterrupt.h"
 
-// Set TRUE to enable Serial printing (and whatever else)
-bool CASSIDEBUG(1);
-#define print if (CASSIDEBUG) Serial.print
-#define printf if (CASSIDEBUG) Serial.printf
-#define println if (CASSIDEBUG) Serial.println
 
 Adafruit_MCP4728 MCP4728;
 
@@ -67,10 +65,6 @@ enum mode_type {
 };
 
 mode_type currentMode(mode_type :: PERFORMANCE_MODE);
-
-
-// Indicates whether the current fader bank has been filled with real data
-bool faderInitValsSet[NUM_BANKS];
 
 bool regLedsDirty(0);
 
@@ -114,6 +108,30 @@ void setTrigRegister(uint8_t val) { trgRegister = val; triggers.setReg(trgRegist
 void setFaderRegister(uint8_t val){ fdrRegister = val; leds.setReg(fdrRegister, 0);  }
 
 void calibrate();
+void savePattern();
+void loadPattern();
+
+volatile uint16_t millisTimer(0);
+volatile uint8_t flashTimer(0);
+
+uint8_t getFlashTimer()
+{
+  uint8_t timerVal;
+  cli();
+  timerVal = flashTimer;
+  sei();
+  uint8_t retval(0);
+  if ((timerVal / 4) % 2)
+  {
+    bitWrite(retval, 0, 1);
+  }
+
+  if ((timerVal / 25) % 2)
+  {
+    bitWrite(retval, 1, 1);
+  }
+  return retval;
+}
 
 ////////////////////////////
 // ISR for Timer 1
@@ -140,6 +158,13 @@ void ICACHE_RAM_ATTR onTimer1()
     }
     gateInVals[gate] = val;
   }
+
+  ++millisTimer;
+  if (millisTimer == 1000)
+  {
+    millisTimer = 0;
+  }
+  flashTimer = millisTimer / 10;
 }
 
 
@@ -158,32 +183,12 @@ int8_t readFlag(uint8_t gate)
 int8_t checkClockFlag(){ return readFlag(0); }
 int8_t checkResetFlag(){ return readFlag(1) == 1; }
 
-
-// Spits out the binary representation of "val" to the serial monitor - 8 bit version
-void printBits(uint8_t  val)
-{
-  for (auto bit = 0; bit < 8; ++bit)
-  {
-    print(bitRead(val, bit) ? '1' : '0');
-  }
-  println(' ');
-}
-
-
-// Spits out the binary representation of "val" to the serial monitor - 16 bit version
-void printBits(uint16_t val)
-{
-  for (auto bit = 15; bit >= 0; --bit)
-  {
-    print(bitRead(val, bit) ? '1' : '0');
-  }
-  println(' ');
-}
-
-
 void setup()
 {
-  if (CASSIDEBUG) Serial.begin(115200);
+#ifdef CASSIDEBUG
+  Serial.begin(115200);
+#endif
+
   delay(100);
 
   // Shift register CS pins
@@ -218,22 +223,17 @@ void setup()
   ONE_OVER_ADC_MAX = 1.0f / pADC0->maxValue();
 
   // Set up external 4 channel DAC
-  println("MCP4728 test...");
+  dbprintln("MCP4728 test...");
   if (!MCP4728.begin(0x64))
   {
-    println("Failed to find MCP4728 chip");
+    dbprintln("Failed to find MCP4728 chip");
     while (1) { delay(1); }
   }
-  println("MCP4728 chip initialized");
+  dbprintln("MCP4728 chip initialized");
 
   for (uint8_t ch(0); ch < 4; ++ch)
   {
     MCP4728.setChannelValue((MCP4728_channel_t)ch, 0, MCP4728_VREF_INTERNAL);
-  }
-
-  for (uint8_t fd(0); fd < NUM_BANKS; ++fd)
-  {
-    faderInitValsSet[fd] = false;
   }
 
   // Set up master clock
@@ -245,26 +245,31 @@ void setup()
   // Initialize virtual fader bank sample buffers
   initFaders(fadersRunning);
   delay(100);
-  for (uint8_t fd = 0; fd < NUM_FADERS; ++fd)
-  {
-    (pCV + fd)->select(0);
-    (pCV + fd)->overWrite();
-
-    // Don't light up locked faders
-    bitWrite(faderLockStateReg, fd, (pCV + fd)->pACTIVE->getLockState() == STATE_UNLOCKED);
-    printf("CH %u: %u\n", fd, (pCV + fd)->readActiveCtrl());
-  }
-  faderInitValsSet[0] = true;
-
-  // Run manual calibration routine
-  // calibrate();
 
   // Pre-fill all pattern registers
   uint16_t randomReg((random(1, 255) << 8) | random(1, 255));
   for (uint8_t bk(0); bk < NUM_BANKS; ++bk)
   {
-    alan.preFill(randomReg, bk);
+    alan.writeToRegister(~bk, bk);
+    // alan.writeToRegister(randomReg, bk);
+    for (uint8_t fd = 0; fd < NUM_FADERS; ++fd)
+    {
+      (pCV + fd)->select(bk);
+      (pCV + fd)->overWrite();
+    }
   }
+
+  for (uint8_t fd = 0; fd < NUM_FADERS; ++fd)
+  {
+      // Don't light up locked faders
+    (pCV + fd)->select(0);
+    (pCV + fd)->pACTIVE->sample();
+    bitWrite(faderLockStateReg, fd, (pCV + fd)->pACTIVE->getLockState() == STATE_UNLOCKED);
+    dbprintf("CH %u: %u\n", fd, (pCV + fd)->readActiveCtrl());
+  }
+  // Run manual calibration routine
+  // calibrate();
+
 
   // Set pattern LEDs to display current pattern
   setDacRegister(alan.getOutput());
@@ -362,37 +367,57 @@ uint16_t noteToDacVal(uint8_t ch, uint16_t note)
 void updateRegLeds()
 {
   regLedsDirty = 0;
-  uint8_t len(alan.getLength());
-  switch (currentMode)
+  if (currentMode == mode_type :: PERFORMANCE_MODE)
   {
-    case mode_type :: PERFORMANCE_MODE:
-      setDacRegister(alan.getOutput());
-      break;
-
-    case mode_type :: SHOW_LENGTH_MODE:
-      if (len <= 8)
-      {
-        setDacRegister(0x01 << (len - 1));
-      }
-      else
-      {
-        setDacRegister(~(0x01 << (len - 9)));
-      }
-      break;
-
-    case mode_type :: PATTERN_LOAD_MODE:
-      setDacRegister(0x01 << (loadSlot - 1));
-      break;
-
-    case mode_type :: PATTERN_SAVE_MODE:
-      setDacRegister(0x01 << (saveSlot - 1));
-      break;
-
-    default:
-      break;
+    leds.setReg(dacRegister, 1);
+    leds.clock();
+    return;
   }
 
-  leds.clock();
+  if (currentMode == mode_type :: SHOW_LENGTH_MODE)
+  {
+    uint8_t len(alan.getLength());
+    if (len <= 8)
+    {
+      leds.setReg(0x01 << (len - 1), 1);
+    }
+    else
+    {
+      leds.setReg(~(0x01 << (len - 9)), 1);
+    }
+    leds.clock();
+    return;
+  }
+
+  uint8_t flashTimer(getFlashTimer());
+
+  if (currentMode == mode_type :: PATTERN_LOAD_MODE)
+  {
+    if (flashTimer & BIT0)
+    {
+      leds.setReg(0, 1);
+    }
+    else
+    {
+      leds.setReg(0x01 << loadSlot, 1);
+    }
+    leds.clock();
+    return;
+  }
+
+  if (currentMode == mode_type :: PATTERN_SAVE_MODE)
+  {
+    if (flashTimer & BIT1)
+    {
+      leds.setReg(0, 1);
+    }
+    else
+    {
+      leds.setReg(0x01 << saveSlot, 1);
+    }
+    leds.clock();
+    return;
+  }
 }
 
 
@@ -476,7 +501,7 @@ void iThinkYouShouldLeaf(uint8_t shiftReg)
   for (auto ch(0); ch < 4; ++ch)
   {
     uint16_t val(noteToDacVal(ch, noteVals[ch]));
-    printf("DAC %u note: %u, val: %u\n", ch, noteVals[ch], val);
+    // dbprintf("DAC %u note: %u, val: %u\n", ch, noteVals[ch], val);
     writeRawValToDac(ch, val);
   }
 
@@ -485,7 +510,7 @@ void iThinkYouShouldLeaf(uint8_t shiftReg)
   uint16_t writeVal_12(noteToDacVal(0, internalDacNote));
   uint8_t writeVal_8(map(writeVal_12, 0, 4096, 0, 256));
   voltsExp.outputVoltage(writeVal_8);
-  printf("Jank : %u\n", writeVal_8);
+  // dbprintf("writeVal_8 : %u\n", writeVal_8);
 }
 
 
@@ -512,7 +537,7 @@ void expandVoltages(uint8_t shiftReg)
       // CV B: Faders & ~register
       noteVals[1] += faderVals[ch];
     }
-    printf("Fader %u: %u\n", ch, faderVals[ch]);
+    // dbprintf("Fader %u: %u\n", ch, faderVals[ch]);
   }
 
   // CV C: abs(CV A - CV B)
@@ -537,14 +562,14 @@ void expandVoltages(uint8_t shiftReg)
   for (uint8_t ch(0); ch < 4; ++ch)
   {
     uint16_t val(noteToDacVal(ch, noteVals[ch]));
-    printf("DAC %u note: %u, val: %u\n", ch, noteVals[ch], val);
+    dbprintf("DAC %u note: %u, val: %u\n", ch, noteVals[ch], val);
     writeRawValToDac(ch, val);
   }
 
   // Write the inverse of the pattern register to the internal (8 bit) DAC
   uint8_t writeVal_8(~shiftReg);
   voltsExp.outputVoltage(writeVal_8);
-  printf("Jank : %u\n", writeVal_8);
+  // dbprintf("writeVal_8 : %u\n", writeVal_8);
 }
 
 
@@ -574,7 +599,7 @@ uint8_t pulseIt(int8_t step, uint8_t inputReg)
 void turingStep(int8_t stepAmount)
 {
   // Handle a pending reset
-  printf("----------------------------\n");
+  dbprintf("----------------------------\n");
   if (checkResetFlag())
   {
     alan.reset();
@@ -589,34 +614,32 @@ void turingStep(int8_t stepAmount)
     set_bit_0 = false;
     uint8_t idx(stepAmount > 0 ? 0 : 7);
     alan.writeBit(idx, 1);
-    println("set bit 0");
+    dbprintln("set bit 0");
   }
   else if (clear_bit_0)
   {
     clear_bit_0 = false;
     uint8_t idx(stepAmount > 0 ? 0 : 7);
     alan.writeBit(idx, 0);
-    println("clear bit 0");
+    dbprintln("clear bit 0");
   }
 
   // Get the Turing register pattern value
-  uint8_t tmpReg(alan.getOutput());
+  dacRegister = alan.getOutput();
   regLedsDirty = 1;
 
   // Update all the various outputs
-  expandVoltages(tmpReg);
-  setFaderRegister(tmpReg & faderLockStateReg);
+  expandVoltages(dacRegister);
+  setFaderRegister(dacRegister & faderLockStateReg);
+  setTrigRegister(pulseIt(alanStep, dacRegister));
 
-  uint8_t trigReg(pulseIt(alanStep, tmpReg));
-  setTrigRegister(trigReg);
 
-  leds.clock();
   triggers.clock();
 
-  print("register:  ");
-  printBits(tmpReg);
-  print("output  :  ");
-  printBits(trigReg);
+  dbprint("register:  ");
+  printBits(dacRegister);
+  dbprint("output  :  ");
+  printBits(trgRegister);
 }
 
 
@@ -642,55 +665,51 @@ void handleEncoder()
     case encEvnts :: Click:
       if (currentMode == mode_type :: PERFORMANCE_MODE)
       {
-        println("perform -> show length");
+        dbprintln("perform -> show length");
         currentMode = SHOW_LENGTH_MODE;
       }
       else if (currentMode == mode_type :: SHOW_LENGTH_MODE)
       {
-        printf("length = %u -> perform\n", alan.getLength());
+        dbprintf("length = %u -> perform\n", alan.getLength());
         currentMode = PERFORMANCE_MODE;
       }
       else
       {
         regLedsDirty = 0;
       }
-      break;
+      return;
 
     case encEvnts :: DblClick:
       if (currentMode == mode_type :: PERFORMANCE_MODE)
       {
-        println("perform -> select pattern");
         currentMode = PATTERN_LOAD_MODE;
       }
       else if (currentMode == mode_type :: PATTERN_LOAD_MODE)
       {
-        printf("load pattern %u -> perform\n", loadSlot);
+        loadPattern();
         currentMode = PERFORMANCE_MODE;
-        break;
       }
       else
       {
         regLedsDirty = 0;
       }
-      break;
+      return;
 
     case encEvnts :: Hold:
       if (currentMode == mode_type :: PERFORMANCE_MODE)
       {
-        println("perform -> save pattern");
         currentMode = PATTERN_SAVE_MODE;
       }
       else if (currentMode == mode_type :: PATTERN_SAVE_MODE)
       {
-        printf("save pattern %u -> perform\n", saveSlot);
+        savePattern();
         currentMode = PERFORMANCE_MODE;
-        break;
       }
       else
       {
         regLedsDirty = 0;
       }
-      break;
+      return;
 
     case encEvnts :: Right:
       switch (currentMode)
@@ -706,20 +725,20 @@ void handleEncoder()
         case mode_type :: PATTERN_LOAD_MODE:
           ++loadSlot;
           loadSlot %= NUM_BANKS;
-          printf("pattern to load: %u\n", loadSlot);
+          dbprintf("pattern to load: %u\n", loadSlot);
           break;
 
         case mode_type :: PATTERN_SAVE_MODE:
           ++saveSlot;
           saveSlot %= NUM_BANKS;
-          printf("save to slot: %u\n", saveSlot);
+          dbprintf("save to slot: %u\n", saveSlot);
           break;
 
         default:
           regLedsDirty = 0;
           break;
       }
-      break;
+      return;
 
     case encEvnts :: Left:
       switch (currentMode)
@@ -735,32 +754,31 @@ void handleEncoder()
         case mode_type :: PATTERN_LOAD_MODE:
           --loadSlot;
           loadSlot %= NUM_BANKS;
-          printf("pattern to load: %u\n", loadSlot);
+          dbprintf("pattern to load: %u\n", loadSlot);
           break;
 
         case mode_type :: PATTERN_SAVE_MODE:
           --saveSlot;
           saveSlot %= NUM_BANKS;
-          printf("save to slot: %u\n", saveSlot);
+          dbprintf("save to slot: %u\n", saveSlot);
           break;
 
         default:
           regLedsDirty = 0;
           break;
       }
-      break;
-
+      return;
 
     case encEvnts :: ClickHold:
-      println("click + hold");
+      dbprintln("click + hold");
       break;
 
     case encEvnts :: ShiftLeft:
-      println("shift left");
+      dbprintln("shift left");
       break;
 
     case encEvnts :: ShiftRight:
-      println("shift right");
+      dbprintln("shift right");
       break;
 
     case encEvnts :: Press:
@@ -780,14 +798,6 @@ void loop()
   {
     // Single clicks on the toggle will set/clear the next bit, but we also want to
     // be able to hold it down and write or clear the entire register
-    if (clickies[0] == ButtonState :: Held)
-    {
-      clear_bit_0 = true;
-    }
-    else if(clickies[1] == ButtonState :: Held)
-    {
-      set_bit_0 = true;
-    }
     turingStep((cvB.readRaw() > 2047) ? -1 : 1);
   }
   else if (checkClockFlag() == -1)
@@ -804,34 +814,30 @@ void loop()
   if ((OctaveRange > 1) && (clickies[0] == ButtonState :: DoubleClicked))
   {
     --OctaveRange;
-    faderLocksChanged = true;
+    setRange(OctaveRange);
   }
   else if ((OctaveRange < 3) && (clickies[1] == ButtonState :: DoubleClicked))
   {
     ++OctaveRange;
-    faderLocksChanged = true;
-  }
-
-  if (faderLocksChanged)
-  {
     setRange(OctaveRange);
-    faderLocksChanged = false;
-    for (uint8_t fd = 0; fd < NUM_FADERS; ++fd)
-    {
-      bitWrite(faderLockStateReg,
-               fd,
-               (pCV + fd)->pACTIVE->getLockState() == LockState :: STATE_UNLOCKED);
-    }
   }
 
   // Single click to set/clear BIT0
-  if (clickies[0] == ButtonState :: Clicked)
+  if (clickies[0] == ButtonState :: Clicked || clickies[0] == ButtonState :: Held)
   {
       clear_bit_0 = true;
   }
-  else if (clickies[1] == ButtonState :: Clicked)
+  else if (clickies[1] == ButtonState :: Clicked || clickies[1] == ButtonState :: Held)
   {
-    set_bit_0 = true;
+    if (currentMode == mode_type :: PERFORMANCE_MODE)
+    {
+      set_bit_0 = true;
+    }
+    else
+    {
+      currentMode = mode_type :: PERFORMANCE_MODE;
+      regLedsDirty = true;
+    }
   }
 
   for (uint8_t fd = 0; fd < NUM_FADERS; ++fd)
@@ -846,14 +852,30 @@ void loop()
   handleEncoder();
 }
 
-void writePattern(uint8_t slot)
+void savePattern()
 {
   for (uint8_t fd = 0; fd < NUM_FADERS; ++fd)
   {
-    (pCV + fd)->copySettings(slot);
+    (pCV + fd)->copySettings(saveSlot);
   }
+  alan.savePattern(saveSlot);
+  dacRegister = alan.getOutput();
+  regLedsDirty = 1;
 }
 
+
+void loadPattern()
+{
+  uint8_t active(0);
+  for (uint8_t fd = 0; fd < NUM_FADERS; ++fd)
+  {
+    (pCV + fd)->select(loadSlot);
+  }
+  alan.loadPattern(loadSlot);
+  dacRegister = alan.getOutput();
+  currentBank = loadSlot;
+  regLedsDirty = 1;
+}
 
 void calibrate()
 {
@@ -864,7 +886,7 @@ void calibrate()
 
   uint16_t outval(0);
   (pCV + selch)->select(0);
-  printf("ch: %u\n", selch);
+  dbprintf("ch: %u\n", selch);
   while (true)
   {
     if (writeHigh.readAndFree())
@@ -878,7 +900,7 @@ void calibrate()
       (pCV + selch)-> select(0);
       leds.tempWrite(selreg, 0);
       leds.tempWrite(selreg, 1);
-      printf("ch: %u\n", selch);
+      dbprintf("ch: %u\n", selch);
     }
 
     outval = 0;
@@ -896,7 +918,7 @@ void calibrate()
                             MCP4728_GAIN_2X);
     if (writeLow.readAndFree())
     {
-      printf("%u\n", outval);
+      dbprintf("%u\n", outval);
     }
   }
 }

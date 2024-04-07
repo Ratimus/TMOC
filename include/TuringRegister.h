@@ -115,8 +115,7 @@ public:
       stepCountIdx_   (6),
       stoch_(Stochasticizer(voltage, cv)),
       NUM_PATTERNS    (8),
-      currentPattern_ (0),
-      nextPattern_    (0)
+      currentBankIdx_ (0)
   {
     pLengthArray_   = new uint8_t [NUM_PATTERNS];
     for (uint8_t bk(0); bk < NUM_PATTERNS; ++bk)
@@ -135,15 +134,36 @@ public:
     pPatternBank = NULL;
   }
 
+  // Returns a register with the first [len] bits of [reg] copied into it
+  // enough times to fill it to the end
+  uint16_t norm(uint16_t reg, uint8_t len)
+  {
+    uint16_t ret(0);
+    uint8_t idx(0);
+    uint8_t absIdx(0);
+    while (true)
+    {
+      idx = 0;
+      while (idx < len)
+      {
+        ret |= (reg & (0x01 << idx));
+        ++idx;
+        ++absIdx;
+      }
+
+      if (absIdx >= 16)
+      {
+        break;
+      }
+      ret <<= len;
+    }
+
+    return ret;
+  }
 
   // Shifts register, returns current step [i.e. prior to advancing]
   uint8_t iterate(int8_t steps)
   {
-    if (currentPattern_ != nextPattern_)
-    {
-      changeBank_(nextPattern_);
-    }
-
     if (resetPending_)
     {
       resetPending_ = false;
@@ -198,18 +218,12 @@ public:
     return retVal;
   }
 
+  // Rotates the working register back to step 0
   void reset()
   {
-    if (offset_ > 0)
-    {
-      workingRegister = (workingRegister >> offset_) | \
-                        (workingRegister << (16 - offset_));
-    }
-    else if (offset_ < 0)
-    {
-      workingRegister = (workingRegister << -offset_) | \
-                        (workingRegister >> (16 + offset_));
-    }
+    offset_ = -offset_;
+    rotateToCurrentStep();
+    offset_ = -offset_;
     resetPending_ = true;
   }
 
@@ -248,74 +262,71 @@ public:
   }
 
 
-  uint16_t getReg()
-  {
-    return *pShiftReg_;
-  }
+  // Returns the current base pattern (i.e. the stored one, not the working one)
+  uint16_t getPattern() { return *pShiftReg_; }
 
+  // Returns the working buffer
   uint8_t getOutput() { return (uint8_t)(workingRegister & 0xFF); }
   uint8_t getLength() { return *pLength_; }
-  uint8_t getStep()
-  {
-    if (offset_ < 0)
-    {
-      return -offset_;
-    }
-    return offset_;
-  }
-
-  uint8_t setNextPattern(uint8_t bankNum)
-  {
-    bankNum %= NUM_PATTERNS;
-    nextPattern_ = bankNum;
-    return nextPattern_;
-  }
+  int8_t getStep() { return offset_; }
 
   void writeBit(uint8_t idx, bool bitVal)
   {
     bitWrite(workingRegister, idx, bitVal);
   }
 
-  void preFill(uint16_t fillVal, uint8_t bankNum)
+  //
+  void writeToRegister(uint16_t fillVal, uint8_t bankNum)
   {
     *(pPatternBank + bankNum) = fillVal;
   }
 
-  void moveToPattern(uint8_t bankIdx)
+  void loadPattern(uint8_t bankIdx, bool saveFirst = false)
   {
-    // Rotate working register back to step 0 before storing it, but don't set the pending
-    // flag if it wasn't already
+    // Rotate working register [offset_] steps RIGHT back to step 0
     bool pr(resetPending_);
-    reset();
-    resetPending_   = pr;
-    *pShiftReg_     = workingRegister;
 
-    // Move pattern pointer to selected bank and copy it into working register
-    currentPattern_ = bankIdx % NUM_PATTERNS;
-    pShiftReg_      = pPatternBank + currentPattern_;
+    reset();
+
+    // Clear this flag if it wasn't already set
+    resetPending_   = pr;
+
+    if (saveFirst)
+    {
+      *pShiftReg_ = workingRegister;
+    }
+
+    // Move pattern pointer to selected bank and copy its contents into working register
+    currentBankIdx_ = bankIdx % NUM_PATTERNS;
+    pShiftReg_      = pPatternBank + currentBankIdx_;
     workingRegister = *pShiftReg_;
 
-    pLength_ = pLengthArray_ + currentPattern_;
+    pLength_ = pLengthArray_ + currentBankIdx_;
     offset_ %= *pLength_;
+    dbprintf("loaded slot %u\n", bankIdx);
+    dbprintln("raw pattern: ");
+    printBits(*pShiftReg_);
     rotateToCurrentStep();
+    dbprintf("rotated to step %i\n", offset_);
+    printBits(workingRegister);
   }
 
-  void overWritePattern(uint8_t bankIdx)
+  void savePattern(uint8_t bankIdx)
   {
     // Rotate working register to step 0
+    uint16_t workingRegCopy(workingRegister);
     bool pr(resetPending_);
     reset();
     resetPending_   = pr;
 
-    // Move pattern pointer to the selected bank and copy working register into it
-    currentPattern_ = bankIdx % NUM_PATTERNS;
-    pShiftReg_      = pPatternBank + currentPattern_;
-    *(pLengthArray_ + currentPattern_) = *pLength_;
-    *pShiftReg_     = workingRegister;
+    // Copy working register into selected bank
+    bankIdx %= NUM_PATTERNS;
+    writeToRegister(norm(workingRegister, *pLength_), bankIdx);
+    *(pLengthArray_ + bankIdx) = *pLength_;
+    workingRegister = workingRegCopy;
 
-    pLength_        = pLengthArray_ + currentPattern_;
-    offset_ %= *pLength_;
-    rotateToCurrentStep();
+    dbprintf("saved to slot %u\n", bankIdx);
+    printBits(*(pPatternBank + bankIdx));
   }
 
 protected:
@@ -333,23 +344,7 @@ protected:
   Stochasticizer  stoch_;
   const uint8_t   NUM_PATTERNS;
   uint16_t        *pPatternBank;
-  uint8_t         currentPattern_;
-  uint8_t         nextPattern_;
-
-  void changeBank_(uint8_t bank)
-  {
-    // Rotate the new pattern to the current step
-    if (offset_ > 0)
-    {
-      *pShiftReg_ = (*pShiftReg_ << offset_) | \
-                    (*pShiftReg_ >> (16 - offset_));
-    }
-    else if (offset_ < 0)
-    {
-      *pShiftReg_ = (*pShiftReg_ >> -offset_) | \
-                    (*pShiftReg_ << (16 + offset_));
-    }
-  }
+  uint8_t         currentBankIdx_;
 };
 
 
