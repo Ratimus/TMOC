@@ -9,9 +9,9 @@
 
 #include <Arduino.h>
 
-#ifndef CASSIDEBUG
-#define CASSIDEBUG
-#endif
+// #ifndef CASSIDEBUG
+// #define CASSIDEBUG
+// #endif
 
 
 #ifdef CASSIDEBUG

@@ -1,6 +1,11 @@
 // ------------------------------------------------------------------------
 // Latchable.h
 //
+// Defines a software model of a hardware latch or register's set/clock/clear
+// functionality. Allows you to set and forget the next value you want the
+// output to take; the output won't change until the precise moment you want
+// it to (i.e. when you set its clock input HIGH)
+//
 // Nov. 2023
 // Ryan "Ratimus" Richardson
 // ------------------------------------------------------------------------

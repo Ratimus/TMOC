@@ -1,6 +1,9 @@
 // ------------------------------------------------------------------------
 // OutputRegister.h
 //
+// Extends the concept defined in "Latchable.h" to a physical hardware
+// shift register (e.g. 74HC595)
+//
 // December 2023
 // Ryan "Ratimus" Richardson
 // ------------------------------------------------------------------------
