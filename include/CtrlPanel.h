@@ -9,6 +9,7 @@
 
 #include <Arduino.h>
 #include "SharedCtrl.h"
+#include "TMOC_HW.h"
 
 extern MultiModeCtrl * faderBank[];
 

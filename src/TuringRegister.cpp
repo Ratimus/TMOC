@@ -16,125 +16,6 @@
 #include <Preferences.h>
 Preferences prefs;
 
-// void savePatternToFlash(uint8_t slot)
-// {
-//   char lclbuf[8];
-//   sprintf(lclbuf, "reg%u", slot);
-//   prefs.putUShort(lclbuf, 0);
-
-//   int16_t min;
-//   int16_t max;
-//   int16_t lockVal;
-// }
-
-// // save settings to eeprom
-// void savesetup(void)
-// {
-//     // https://randomnerdtutorials.com/esp32-save-data-permanently-preferences/
-//   prefs.begin("setup", false);  // Read-only = false
-//   for (uint8_t vidx(0); vidx < 4; ++vidx)
-//   {
-//     Voice *pVoice = &voice[vidx];
-//     switch(vidx)
-//     {
-//       case 0:
-//         prefs.putUChar("cv_mode0", pVoice->cv_mode.D);
-//         prefs.putUChar("sample0", pVoice->sample.D);
-//         prefs.putUChar("mix0", pVoice->mix.D);
-//         prefs.putChar("pitch0", pVoice->pitch.D);
-//         prefs.putUChar("decay0", pVoice->decay.D);
-//         prefs.putUChar("envShape0", pVoice->envShape.D);
-//         prefs.putBool("choke0", pVoice->choke.D);
-//         break;
-//       case 1:
-//         prefs.putUChar("cv_mode1", pVoice->cv_mode.D);
-//         prefs.putUChar("sample1", pVoice->sample.D);
-//         prefs.putUChar("mix1", pVoice->mix.D);
-//         prefs.putChar("pitch1", pVoice->pitch.D);
-//         prefs.putUChar("decay1", pVoice->decay.D);
-//         prefs.putUChar("envShape1", pVoice->envShape.D);
-//         break;
-//       case 2:
-//         prefs.putUChar("cv_mode2", pVoice->cv_mode.D);
-//         prefs.putUChar("sample2", pVoice->sample.D);
-//         prefs.putUChar("mix2", pVoice->mix.D);
-//         prefs.putChar("pitch2", pVoice->pitch.D);
-//         prefs.putUChar("decay2", pVoice->decay.D);
-//         prefs.putUChar("envShape2", pVoice->envShape.D);
-//         prefs.putBool("choke2", pVoice->choke.D);
-//         break;
-//       case 3:
-//         prefs.putUChar("cv_mode3", pVoice->cv_mode.D);
-//         prefs.putUChar("sample3", pVoice->sample.D);
-//         prefs.putUChar("mix3", pVoice->mix.D);
-//         prefs.putChar("pitch3", pVoice->pitch.D);
-//         prefs.putUChar("decay3", pVoice->decay.D);
-//         prefs.putUChar("envShape3", pVoice->envShape.D);
-//         break;
-//       default:
-//         break;
-//     }
-//   }
-//   prefs.end();
-//   Serial.println("Settings saved");
-//   return proceed;
-// }
-
-
-// void loadPrefs(uint8_t vidx)
-// {
-// prefs.begin("setup", true);  // Read-only = true
-// Voice *pVoice = &voice[vidx];
-// uint8_t cv_mode, mix, pitch, decay;
-// switch(vidx)
-// {
-//   case 0:
-//     pVoice->setDefaults(
-//       prefs.getUChar("sample0", 0),
-//       prefs.getUChar("mix0", 100),
-//       prefs.getUChar("decay0", 100),
-//       prefs.getChar("pitch0", 0),
-//       prefs.getUChar("cv_mode0", NONE),
-//       prefs.getUChar("envShape0", 2),
-//       prefs.getBool("choke0", 1));
-//     break;
-//   case 1:
-//     pVoice->setDefaults(
-//       prefs.getUChar("sample1", 3),
-//       prefs.getUChar("mix1", 100),
-//       prefs.getUChar("decay1", 100),
-//       prefs.getChar("pitch1", 0),
-//       prefs.getUChar("cv_mode1", NONE),
-//       prefs.getUChar("envShape1", 2),
-//       false);
-//     break;
-//   case 2:
-//     pVoice->setDefaults(
-//       prefs.getUChar("sample2", 7),
-//       prefs.getUChar("mix2", 100),
-//       prefs.getUChar("decay2", 100),
-//       prefs.getChar("pitch2", 0),
-//       prefs.getUChar("cv_mode2", NONE),
-//       prefs.getUChar("envShape2", 2),
-//       prefs.getBool("choke2", 1));
-//     break;
-//   case 3:
-//     pVoice->setDefaults(
-//       prefs.getUChar("sample3", 17),
-//       prefs.getUChar("mix3", 100),
-//       prefs.getUChar("decay3", 100),
-//       prefs.getChar("pitch3", 0),
-//       prefs.getUChar("cv_mode3", NONE),
-//       prefs.getUChar("envShape3", 2),
-//       false);
-//     break;
-//   default:
-//     break;
-// }
-// prefs.end();
-// Serial.printf("Loaded Channel %d with sample %d (%s)\n", vidx, pVoice->sample.Q, pVoice->pSample->sname);
-// }
-
 
 Stochasticizer :: Stochasticizer(
   ESP32AnalogRead * voltage,
@@ -455,3 +336,123 @@ void TuringRegister :: quietRotate(int8_t steps)
   }
 }
 
+// TODO: incorporate this stuff:
+
+// void savePatternToFlash(uint8_t slot)
+// {
+//   char lclbuf[8];
+//   sprintf(lclbuf, "reg%u", slot);
+//   prefs.putUShort(lclbuf, 0);
+
+//   int16_t min;
+//   int16_t max;
+//   int16_t lockVal;
+// }
+
+// // save settings to eeprom
+// void savesetup(void)
+// {
+//     // https://randomnerdtutorials.com/esp32-save-data-permanently-preferences/
+//   prefs.begin("setup", false);  // Read-only = false
+//   for (uint8_t vidx(0); vidx < 4; ++vidx)
+//   {
+//     Voice *pVoice = &voice[vidx];
+//     switch(vidx)
+//     {
+//       case 0:
+//         prefs.putUChar("cv_mode0", pVoice->cv_mode.D);
+//         prefs.putUChar("sample0", pVoice->sample.D);
+//         prefs.putUChar("mix0", pVoice->mix.D);
+//         prefs.putChar("pitch0", pVoice->pitch.D);
+//         prefs.putUChar("decay0", pVoice->decay.D);
+//         prefs.putUChar("envShape0", pVoice->envShape.D);
+//         prefs.putBool("choke0", pVoice->choke.D);
+//         break;
+//       case 1:
+//         prefs.putUChar("cv_mode1", pVoice->cv_mode.D);
+//         prefs.putUChar("sample1", pVoice->sample.D);
+//         prefs.putUChar("mix1", pVoice->mix.D);
+//         prefs.putChar("pitch1", pVoice->pitch.D);
+//         prefs.putUChar("decay1", pVoice->decay.D);
+//         prefs.putUChar("envShape1", pVoice->envShape.D);
+//         break;
+//       case 2:
+//         prefs.putUChar("cv_mode2", pVoice->cv_mode.D);
+//         prefs.putUChar("sample2", pVoice->sample.D);
+//         prefs.putUChar("mix2", pVoice->mix.D);
+//         prefs.putChar("pitch2", pVoice->pitch.D);
+//         prefs.putUChar("decay2", pVoice->decay.D);
+//         prefs.putUChar("envShape2", pVoice->envShape.D);
+//         prefs.putBool("choke2", pVoice->choke.D);
+//         break;
+//       case 3:
+//         prefs.putUChar("cv_mode3", pVoice->cv_mode.D);
+//         prefs.putUChar("sample3", pVoice->sample.D);
+//         prefs.putUChar("mix3", pVoice->mix.D);
+//         prefs.putChar("pitch3", pVoice->pitch.D);
+//         prefs.putUChar("decay3", pVoice->decay.D);
+//         prefs.putUChar("envShape3", pVoice->envShape.D);
+//         break;
+//       default:
+//         break;
+//     }
+//   }
+//   prefs.end();
+//   Serial.println("Settings saved");
+//   return proceed;
+// }
+
+
+// void loadPrefs(uint8_t vidx)
+// {
+// prefs.begin("setup", true);  // Read-only = true
+// Voice *pVoice = &voice[vidx];
+// uint8_t cv_mode, mix, pitch, decay;
+// switch(vidx)
+// {
+//   case 0:
+//     pVoice->setDefaults(
+//       prefs.getUChar("sample0", 0),
+//       prefs.getUChar("mix0", 100),
+//       prefs.getUChar("decay0", 100),
+//       prefs.getChar("pitch0", 0),
+//       prefs.getUChar("cv_mode0", NONE),
+//       prefs.getUChar("envShape0", 2),
+//       prefs.getBool("choke0", 1));
+//     break;
+//   case 1:
+//     pVoice->setDefaults(
+//       prefs.getUChar("sample1", 3),
+//       prefs.getUChar("mix1", 100),
+//       prefs.getUChar("decay1", 100),
+//       prefs.getChar("pitch1", 0),
+//       prefs.getUChar("cv_mode1", NONE),
+//       prefs.getUChar("envShape1", 2),
+//       false);
+//     break;
+//   case 2:
+//     pVoice->setDefaults(
+//       prefs.getUChar("sample2", 7),
+//       prefs.getUChar("mix2", 100),
+//       prefs.getUChar("decay2", 100),
+//       prefs.getChar("pitch2", 0),
+//       prefs.getUChar("cv_mode2", NONE),
+//       prefs.getUChar("envShape2", 2),
+//       prefs.getBool("choke2", 1));
+//     break;
+//   case 3:
+//     pVoice->setDefaults(
+//       prefs.getUChar("sample3", 17),
+//       prefs.getUChar("mix3", 100),
+//       prefs.getUChar("decay3", 100),
+//       prefs.getChar("pitch3", 0),
+//       prefs.getUChar("cv_mode3", NONE),
+//       prefs.getUChar("envShape3", 2),
+//       false);
+//     break;
+//   default:
+//     break;
+// }
+// prefs.end();
+// Serial.printf("Loaded Channel %d with sample %d (%s)\n", vidx, pVoice->sample.Q, pVoice->pSample->sname);
+// }

@@ -2,7 +2,7 @@
 #include <Arduino.h>
 #include "MagicButton.h"
 #include "MCP_ADC.h"
-#include "TMOC_HW.h"
+// #include "TMOC_HW.h"
 #include <CtrlPanel.h>
 
 ////////////////////////////////////////////////////////////////
