@@ -1,4 +1,4 @@
-                       Turing Machine On Crack
+# Turing Machine On Crack
 
 A software re-imagining of Tom Whitwell / Music Thing Modular's Turing Machine random looping sequencer, plus Voltages and Pulses expanders.
 
