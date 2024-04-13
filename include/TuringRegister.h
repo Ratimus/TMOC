@@ -46,14 +46,13 @@ public:
   uint16_t norm(uint16_t reg, uint8_t len);
 
   // Shifts register, returns current step [i.e. prior to advancing]
-  uint8_t iterate(int8_t steps, bool passive = false);
+  uint8_t iterate(int8_t steps);
 
   // Rotates the working register back to step 0
   void reset();
   void rotateToCurrentStep();
   void lengthPLUS();
   void lengthMINUS();
-  void quietRotate(int8_t steps);
 
   // Returns the current base pattern (i.e. the stored one, not the working one)
   uint16_t getPattern() { return *pShiftReg_; }
@@ -70,7 +69,7 @@ public:
   void writeToRegister(uint16_t fillVal, uint8_t bankNum);
   void loadPattern(uint8_t bankIdx, bool saveFirst = false);
   void savePattern(uint8_t bankIdx);
-  void flagForReAnchor() { anchorBit0_ = true; }
+  void reAnchor() { offset_ = 0; }
 
 protected:
   bool            inReverse_;

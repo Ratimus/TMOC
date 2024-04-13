@@ -14,7 +14,9 @@
 // Ryan "Ratimus" Richardson
 // ------------------------------------------------------------------------
 
-// Set TRUE to enable Serial printing (and whatever else)
+// NOTE: CASSIDEBUG is #defined (or not) in RatFuncs.h
+// #define it TRUE to enable Serial printing (and whatever else)
+
 #include <Arduino.h>
 #include <Wire.h>
 #include "TMOC_HW.h"
@@ -383,7 +385,6 @@ void updateRegLeds()
   }
 }
 
-
 // "Drunken Walk" algorithm - randomized melodies but notes tend to cluster together
 // TODO: Once this is implemented as a sequencer mode, add control over the degree of
 // deviation
@@ -681,6 +682,7 @@ void handleEncoder()
       {
         case mode_type :: PERFORMANCE_MODE:
           turingStep(1);
+          dbprintf("step %d of %d\n", alan.getStep(), alan.getLength());
           break;
 
         case mode_type :: CHANGE_LENGTH_MODE:
@@ -710,6 +712,7 @@ void handleEncoder()
       {
         case mode_type :: PERFORMANCE_MODE:
           turingStep(-1);
+          dbprintf("step %d of %d\n", alan.getStep(), alan.getLength());
           break;
 
         case mode_type :: CHANGE_LENGTH_MODE:
@@ -735,15 +738,14 @@ void handleEncoder()
       return;
 
     case encEvnts :: ClickHold:
-      alan.flagForReAnchor();
+      alan.reAnchor();
+      dbprintf("step %d of %d\n", alan.getStep(), alan.getLength());
       break;
 
     case encEvnts :: ShiftLeft:
-      alan.quietRotate(-1);
       break;
 
     case encEvnts :: ShiftRight:
-      alan.quietRotate(1);
       break;
 
     case encEvnts :: Press:

@@ -155,22 +155,18 @@ uint16_t TuringRegister :: norm(uint16_t reg, uint8_t len)
 
 
 // Shifts register, returns current step [i.e. prior to advancing]
-uint8_t TuringRegister :: iterate(int8_t steps, bool passive)
+uint8_t TuringRegister :: iterate(int8_t steps)
 {
-  if (!passive)
-  {
-    if (anchorBit0_)
-    {
-      anchorBit0_   = false;
-      offset_       = 0;
-    }
+  // dbprintf("%s shift %u steps %s\n",
+  //          passive ? "passive" : "active",
+  //          steps > 0 ? steps : -steps,
+  //          steps > 0 ? "forward" : "backward");
 
-    if (resetPending_)
-    {
-      resetPending_ = false;
-      offset_       = steps;
-      return 0;
-    }
+  if (resetPending_)
+  {
+    resetPending_ = false;
+    offset_       = steps;
+    return 0;
   }
 
   uint8_t leftAmt;
@@ -199,17 +195,12 @@ uint8_t TuringRegister :: iterate(int8_t steps, bool passive)
     writeIdx = 7;
   }
 
-  bool writeVal(stoch_.stochasticize(bitRead(workingRegister, readIdx)));
+  bool writeVal(bitRead(workingRegister, readIdx));
   workingRegister = (workingRegister << leftAmt) | \
                     (workingRegister >> rightAmt);
-
-  if (passive)
-  {
-    return offset_;
-  }
+  writeVal = stoch_.stochasticize(writeVal);
 
   bitWrite(workingRegister, writeIdx, writeVal);
-
   uint8_t retVal(offset_);
 
   offset_ += steps;
@@ -326,15 +317,6 @@ void TuringRegister :: savePattern(uint8_t bankIdx)
   printBits(*(pPatternBank + bankIdx));
 }
 
-
-void TuringRegister :: quietRotate(int8_t steps)
-{
-  int8_t dir(steps > 0 ? 1 : -1);
-  for (auto step(0); step < steps; ++ step)
-  {
-    iterate(dir, true);
-  }
-}
 
 // TODO: incorporate this stuff:
 
