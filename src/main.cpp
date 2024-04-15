@@ -15,7 +15,7 @@
 // ------------------------------------------------------------------------
 
 // NOTE: CASSIDEBUG is #defined (or not) in RatFuncs.h
-// #define it TRUE to enable Serial printing (and whatever else)
+// #define it to enable Serial printing (and whatever else)
 
 #include <Arduino.h>
 #include <Wire.h>
@@ -97,7 +97,13 @@ bool    faderLocksChanged(1);
 volatile bool   gateInVals    [NUM_GATES_IN]{0, 0};
 volatile int8_t newGateFlags  [NUM_GATES_IN]{0, 0};
 
-const MCP4728_channel_t DAC_CH[]{MCP4728_CHANNEL_D, MCP4728_CHANNEL_B, MCP4728_CHANNEL_A, MCP4728_CHANNEL_C};
+const MCP4728_channel_t DAC_CH []
+{
+  MCP4728_CHANNEL_D,
+  MCP4728_CHANNEL_B,
+  MCP4728_CHANNEL_A,
+  MCP4728_CHANNEL_C
+};
 
 float ONE_OVER_ADC_MAX(0.0);
 

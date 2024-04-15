@@ -29,6 +29,7 @@ void initADC_LOUD()
 }
 
 
+// Sets upper and lower bounds for faders based on desired octave range
 void setRange(uint8_t octaves)
 {
   for (auto fader(0); fader < NUM_FADERS; ++fader)
