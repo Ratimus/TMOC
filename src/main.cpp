@@ -95,7 +95,7 @@ uint8_t faderLockStateReg(0xFF);
 bool    faderLocksChanged(1);
 
 // Keep track of Clock and Reset digital inputs
-GateInEsp32 gates(NUM_GATES_IN, GATE_PIN);
+GateInArduino gates(NUM_GATES_IN, GATE_PIN);
 
 const MCP4728_channel_t DAC_CH []
 {
