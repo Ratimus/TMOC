@@ -20,9 +20,9 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include "TMOC_HW.h"
-#include "GateIn.h"
-#include "DacESP32.h"
-#include "RatFuncs.h"
+#include <GateIn.h>
+#include <DacESP32.h>
+#include <RatFuncs.h>
 #include <CtrlPanel.h>
 #include <bitHelpers.h>
 #include <MagicButton.h>
