@@ -20,6 +20,7 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include "TMOC_HW.h"
+#include "GateIn.h"
 #include "DacESP32.h"
 #include "RatFuncs.h"
 #include <CtrlPanel.h>
@@ -94,8 +95,7 @@ uint8_t faderLockStateReg(0xFF);
 bool    faderLocksChanged(1);
 
 // Keep track of Clock and Reset digital inputs
-volatile bool   gateInVals    [NUM_GATES_IN]{0, 0};
-volatile int8_t newGateFlags  [NUM_GATES_IN]{0, 0};
+GateInEsp32 gates(NUM_GATES_IN, GATE_PIN);
 
 const MCP4728_channel_t DAC_CH []
 {
@@ -119,6 +119,8 @@ void loadPattern();
 volatile uint16_t millisTimer(0);
 volatile uint8_t flashTimer(0);
 
+
+// This blinks LEDs on and off with different timings to indicate which mode you're in
 uint8_t getFlashTimer()
 {
   uint8_t timerVal;
@@ -151,15 +153,7 @@ void ICACHE_RAM_ATTR onTimer1()
   writeLow.service();
   writeHigh.service();
 
-  for (uint8_t gate(0); gate < NUM_GATES_IN; ++gate)
-  {
-    bool val(!digitalRead(GATE_PIN[gate]));
-    if (val != gateInVals[gate])
-    {
-      newGateFlags[gate] = (int8_t)val - (int8_t)gateInVals[gate];
-    }
-    gateInVals[gate] = val;
-  }
+  gates.service();
 
   ++millisTimer;
   if (millisTimer == 1000)
@@ -168,22 +162,6 @@ void ICACHE_RAM_ATTR onTimer1()
   }
   flashTimer = millisTimer / 10;
 }
-
-
-// Thread-safe getter for gate input rising edge flags
-int8_t readFlag(uint8_t gate)
-{
-  int8_t ret;
-  cli();
-  ret = newGateFlags[gate];
-  newGateFlags[gate] = 0;
-  sei();
-
-  return ret;
-}
-
-int8_t checkClockFlag(){ return readFlag(0); }
-int8_t checkResetFlag(){ return readFlag(1) == 1; }
 
 
 void setup()
@@ -563,13 +541,15 @@ uint8_t pulseIt(int8_t step, uint8_t inputReg)
   return outputReg;
 }
 
+#define RESET_FLAG 0
+#define CLOCK_FLAG 1
 
 // Got an external clock pulse? Do the thing
 void turingStep(int8_t stepAmount)
 {
   // Handle a pending reset
   // dbprintf("----------------------------\n");
-  if (checkResetFlag())
+  if (gates.readRiseFlag(RESET_FLAG) == 1)
   {
     alan.reset();
   }
@@ -766,13 +746,13 @@ void handleEncoder()
 // release, so I need to bring that back as an option if I want it to function that way
 void loop()
 {
-  if (checkClockFlag() == 1)
+  if (gates.readRiseFlag(CLOCK_FLAG))
   {
     // Single clicks on the toggle will set/clear the next bit, but we also want to
     // be able to hold it down and write or clear the entire register
     turingStep((cvB.readRaw() > 2047) ? -1 : 1);
   }
-  else if (checkClockFlag() == -1)
+  else if (gates.readFallFlag(CLOCK_FLAG))
   {
     triggers.allOff();
   }
