@@ -13,10 +13,11 @@
 // Nov. 2022
 // Ryan "Ratimus" Richardson
 // ------------------------------------------------------------------------
+
+// define RATDEBUG to enable Serial printing (and whatever else) - see RatFuncs.h
 // #ifndef RATDEBUG
 // #define RATDEBUG
 // #endif
-// #define RATDEBUG to enable Serial printing (and whatever else) - see RatFuncs.h
 
 #include <Arduino.h>
 #include <Wire.h>
@@ -97,7 +98,7 @@ uint8_t faderLockStateReg(0xFF);
 bool    faderLocksChanged(1);
 
 // Keep track of Clock and Reset digital inputs
-GateInArduino gates(NUM_GATES_IN, GATE_PIN);
+GateInArduino gates(NUM_GATES_IN, GATE_PIN, true);
 
 hw_timer_t *timer1(nullptr);   // Timer library takes care of telling this where to point
 
@@ -192,10 +193,6 @@ void setup()
   cvA.attach(CV_IN_A);
   cvB.attach(CV_IN_B);
   turing.attach(LOOP_CTRL);
-
-  // Gate inputs
-  pinMode(CLOCK_IN,         INPUT);
-  pinMode(RESET_IN,         INPUT);
 
   // Clear trigger output register
   setTrigRegister(0);
@@ -482,16 +479,17 @@ uint8_t pulseIt(int8_t step, uint8_t inputReg)
   return outputReg;
 }
 
-#define RESET_FLAG 0
-#define CLOCK_FLAG 1
+#define RESET_FLAG 1
+#define CLOCK_FLAG 0
 
 // Got an external clock pulse? Do the thing
 void turingStep(int8_t stepAmount)
 {
   // Handle a pending reset
   // dbprintf("----------------------------\n");
-  if (gates.readRiseFlag(RESET_FLAG) == 1)
+  if (gates.readRiseFlag(RESET_FLAG))
   {
+    dbprintf("RESET!!!\n");
     alan.reset();
   }
 
@@ -687,6 +685,7 @@ void loop()
 {
   if (gates.readRiseFlag(CLOCK_FLAG))
   {
+    dbprintf("CLOCK!\n");
     // Single clicks on the toggle will set/clear the next bit, but we also want to
     // be able to hold it down and write or clear the entire register
     turingStep((cvB.readRaw() > 2047) ? -1 : 1);
