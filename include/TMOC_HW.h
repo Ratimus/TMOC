@@ -41,14 +41,6 @@ const uint8_t sliderMap[] = {7, 6, 5, 4, 3, 2, 1, 0};
 const uint8_t trgMap   [] = {7, 6, 5, 4, 3, 2, 0, 1};
 const uint8_t regMap   [] = {3, 7, 5, 4, 1, 6, 0, 2, 9, 8, 11, 10, 13, 12, 15, 14};
 
-const uint16_t DAC_0_CAL[]{0, 393, 802, 1217, 1627, 2041, 2459, 2869, 3279};  // 409 415 410 414 418 410 410
-const uint16_t DAC_1_CAL[]{0, 408, 818, 1230, 1638, 2049, 2470, 2882, 3285};  // 410 412 408 411 421 412 413
-const uint16_t DAC_2_CAL[]{0, 400, 811, 1224, 1631, 2041, 2459, 2872, 3280};  // 411 413 407 410 418 413 408
-const uint16_t DAC_3_CAL[]{0, 394, 804, 1214, 1625, 2036, 2454, 2862, 3270};  // 410 410 411 411 418 408 408
-
-const uint8_t CAL_TABLE_HIGH_OCTAVE(8);
-static const uint16_t *DAC_CAL_TABLES[]{DAC_0_CAL, DAC_1_CAL, DAC_2_CAL, DAC_3_CAL};
-
 const uint8_t ENC_SENSITIVITY       (1);
 const bool    ENC_ACTIVE_LOW        (1);
 const uint8_t ENC_STEPS_PER_NOTCH   (4);

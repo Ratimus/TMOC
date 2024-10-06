@@ -7,19 +7,15 @@
 // ------------------------------------------------------------------------
 
 #include "RatFuncs.h"
-// #include <Arduino.h>
-// #include <bitHelpers.h>
-// #include <MagicButton.h>
-// #include <Preferences.h>
-// #include <ESP32AnalogRead.h>
 #include "TuringRegister.h"
 #include <Preferences.h>
+
 Preferences prefs;
 
 
-Stochasticizer :: Stochasticizer(
-  ESP32AnalogRead * voltage,
-  ESP32AnalogRead * cv):
+TuringRegister :: Stochasticizer :: Stochasticizer(
+  ESP32AnalogRead * const voltage,
+  ESP32AnalogRead * const cv):
     THRESH_LOW(265.0),
     THRESH_HIGH(3125.0),
     pVolts(voltage),
@@ -29,7 +25,7 @@ Stochasticizer :: Stochasticizer(
 
 // Coin-toss algorithm; uses knob position to determine likelihood of flipping a
 // bit or leaving it untouched
-bool Stochasticizer :: stochasticize(bool startVal)
+bool TuringRegister :: Stochasticizer :: stochasticize(const bool startVal) const
 {
   float prob(pVolts->readMiliVolts());
   if (prob > THRESH_HIGH)
@@ -62,8 +58,8 @@ bool Stochasticizer :: stochasticize(bool startVal)
 
 // Class to hold and manipulate sequencer shift register patterns
 TuringRegister :: TuringRegister(
-  ESP32AnalogRead *voltage,
-  ESP32AnalogRead *cv):
+  ESP32AnalogRead * const voltage,
+  ESP32AnalogRead * const cv):
     inReverse_      (0),
     offset_         (0),
     resetPending_   (0),
@@ -71,30 +67,31 @@ TuringRegister :: TuringRegister(
     stepCountIdx_   (6),
     stoch_(Stochasticizer(voltage, cv)),
     NUM_PATTERNS    (8),
-    currentBankIdx_ (0)
+    currentBankIdx_ (0),
+    pPatternLength(&lengthsBank[0])
 {
-  pLengthArray_   = new uint8_t [NUM_PATTERNS];
+  lengthsBank.reserve(NUM_PATTERNS);
+  patternBank.reserve(NUM_PATTERNS);
+
   for (uint8_t bk(0); bk < NUM_PATTERNS; ++bk)
   {
-    *(pLengthArray_ + bk) = STEP_LENGTH_VALS[stepCountIdx_];
+    lengthsBank.push_back(STEP_LENGTH_VALS[stepCountIdx_]);
+    patternBank.push_back(rand());
   }
-  pLength_        = pLengthArray_;
-  pPatternBank    = new uint16_t [NUM_PATTERNS];
-  pShiftReg_      = pPatternBank;
-  workingRegister = *pShiftReg_;
+
+  pShiftReg = &patternBank[0];
+  pPatternLength = &lengthsBank[0];
+  workingRegister = *pShiftReg;
 }
 
 
 TuringRegister :: ~TuringRegister()
-{
-  delete [] pPatternBank;
-  pPatternBank = NULL;
-}
+{ ; }
 
 
 // Returns a register with the first [len] bits of [reg] copied into it
 // enough times to fill it to the end
-uint16_t TuringRegister :: norm(uint16_t reg, uint8_t len)
+uint16_t TuringRegister :: norm(uint16_t reg, uint8_t len) const
 {
   uint16_t ret(0);
   uint8_t idx(0);
@@ -145,14 +142,14 @@ uint8_t TuringRegister :: iterate(int8_t steps)
   {
     leftAmt   = 1;
     rightAmt  = 15;
-    readIdx   = *pLength_ - 1;
+    readIdx   = *pPatternLength - 1;
     writeIdx  = 0;
   }
   else
   {
     leftAmt   = 15;
     rightAmt  = 1;
-    readIdx   = 8 - *pLength_;
+    readIdx   = 8 - *pPatternLength;
 
     if (readIdx < 0)
     {
@@ -170,7 +167,7 @@ uint8_t TuringRegister :: iterate(int8_t steps)
   uint8_t retVal(offset_);
 
   offset_ += steps;
-  if ((offset_ >= *pLength_) || (offset_ <= -*pLength_))
+  if ((offset_ >= *pPatternLength) || (offset_ <= -*pPatternLength))
   {
     offset_ = 0;
   }
@@ -211,7 +208,7 @@ void TuringRegister :: lengthPLUS()
     return;
   }
   ++stepCountIdx_;
-  *pLength_ = STEP_LENGTH_VALS[stepCountIdx_];
+  pPatternLength = &STEP_LENGTH_VALS[stepCountIdx_];
 }
 
 
@@ -222,24 +219,23 @@ void TuringRegister :: lengthMINUS()
     return;
   }
   --stepCountIdx_;
-  *pLength_ = STEP_LENGTH_VALS[stepCountIdx_];
+  pPatternLength = &STEP_LENGTH_VALS[stepCountIdx_];
 }
 
 
-void TuringRegister :: writeBit(uint8_t idx, bool bitVal)
+void TuringRegister :: writeBit(const uint8_t idx, const bool bitVal)
 {
   bitWrite(workingRegister, idx, bitVal);
 }
 
 
-
-void TuringRegister :: writeToRegister(uint16_t fillVal, uint8_t bankNum)
+void TuringRegister :: writeToRegister(const uint16_t fillVal, const uint8_t bankNum)
 {
-  *(pPatternBank + bankNum) = fillVal;
+  patternBank[bankNum] = fillVal;
 }
 
 
-void TuringRegister :: loadPattern(uint8_t bankIdx, bool saveFirst)
+void TuringRegister :: loadPattern(const uint8_t bankIdx, const bool saveFirst)
 {
   // Rotate working register [offset_] steps RIGHT back to step 0
   bool pr(resetPending_);
@@ -247,20 +243,19 @@ void TuringRegister :: loadPattern(uint8_t bankIdx, bool saveFirst)
   reset();
 
   // Clear this flag if it wasn't already set
-  resetPending_   = pr;
+  resetPending_  = pr;
 
   if (saveFirst)
   {
-    *pShiftReg_ = workingRegister;
+    patternBank[currentBankIdx_] = workingRegister;
   }
 
   // Move pattern pointer to selected bank and copy its contents into working register
   currentBankIdx_ = bankIdx % NUM_PATTERNS;
-  pShiftReg_      = pPatternBank + currentBankIdx_;
-  workingRegister = *pShiftReg_;
-
-  pLength_ = pLengthArray_ + currentBankIdx_;
-  offset_ %= *pLength_;
+  pShiftReg       = &patternBank[currentBankIdx_];
+  workingRegister = *pShiftReg;
+  pPatternLength  = &lengthsBank[currentBankIdx_];
+  offset_ %= *pPatternLength;
   rotateToCurrentStep();
 }
 
@@ -275,12 +270,12 @@ void TuringRegister :: savePattern(uint8_t bankIdx)
 
   // Copy working register into selected bank
   bankIdx %= NUM_PATTERNS;
-  writeToRegister(norm(workingRegister, *pLength_), bankIdx);
-  *(pLengthArray_ + bankIdx) = *pLength_;
+  writeToRegister(norm(workingRegister, *pPatternLength), bankIdx);
+  lengthsBank[bankIdx] = *pPatternLength;
   workingRegister = workingRegCopy;
 
   dbprintf("saved to slot %u\n", bankIdx);
-  printBits(*(pPatternBank + bankIdx));
+  printBits(lengthsBank[bankIdx]);
 }
 
 

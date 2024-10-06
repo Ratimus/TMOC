@@ -13,9 +13,10 @@
 // Nov. 2022
 // Ryan "Ratimus" Richardson
 // ------------------------------------------------------------------------
-
-// NOTE: CASSIDEBUG is #defined (or not) in RatFuncs.h
-// #define it to enable Serial printing (and whatever else)
+// #ifndef RATDEBUG
+// #define RATDEBUG
+// #endif
+// #define RATDEBUG to enable Serial printing (and whatever else) - see RatFuncs.h
 
 #include <Arduino.h>
 #include <Wire.h>
@@ -23,6 +24,7 @@
 #include <GateIn.h>
 #include <DacESP32.h>
 #include <RatFuncs.h>
+#include "OutputDac.h"
 #include <CtrlPanel.h>
 #include <bitHelpers.h>
 #include <MagicButton.h>
@@ -30,36 +32,27 @@
 #include "TuringRegister.h"
 #include <OutputRegister.h>
 #include <ESP32AnalogRead.h>
-#include <Adafruit_MCP4728.h>
 #include <ClickEncoderInterface.h>
 #include "ESP32_New_TimerInterrupt.h"
 
-
-Adafruit_MCP4728 MCP4728;
 
 // Bit 0 set/clear
 MagicButton writeHigh(TOGGLE_UP, 1, 1);
 MagicButton writeLow(TOGGLE_DOWN, 1, 1);
 
+// This is the device driver for our rotary encoder
 ClickEncoder encoder(ENC_A,
                      ENC_B,
                      ENC_SW,
                      ENC_STEPS_PER_NOTCH,
                      ENC_ACTIVE_LOW);
 
+// And this is the interface to the encoder's device driver
 ClickEncoderInterface encoderInterface(encoder,
                                        ENC_SENSITIVITY);
 
-ESP32AnalogRead cvA;        // "CV" input
-ESP32AnalogRead cvB;        // "NOISE" input
-ESP32AnalogRead turing;     // "LOOP" variable resistor
-
-uint8_t OctaveRange(1);
-uint8_t currentBank(0);
-uint8_t loadSlot(0);
-uint8_t saveSlot(0);
-
-enum mode_type {
+// Different editing/playback modes for our rotary encoder
+enum class mode_type {
   PERFORMANCE_MODE,
   CHANGE_LENGTH_MODE,
   PATTERN_SAVE_MODE,
@@ -69,11 +62,20 @@ enum mode_type {
 
 mode_type currentMode(mode_type :: PERFORMANCE_MODE);
 
-bool regLedsDirty(0);
+// Use the onboard ADCs for external control voltage & the main control
+ESP32AnalogRead cvA;        // "CV" input
+ESP32AnalogRead cvB;        // "NOISE" input
+ESP32AnalogRead turing;     // "LOOP" variable resistor
+
+// Sequencer state variables
+uint8_t loadSlot(0);
+uint8_t saveSlot(0);
+uint8_t OctaveRange(1);
+uint8_t currentBank(0);
+
 bool set_bit_0(0);
 bool clear_bit_0(0);
-
-hw_timer_t *timer1(NULL);   // Timer library takes care of telling this where to point
+bool regLedsDirty(0);
 
 // Here's the ESP32 DAC output
 DacESP32 voltsExp(static_cast<gpio_num_t>(DAC1_CV_OUT));
@@ -97,13 +99,7 @@ bool    faderLocksChanged(1);
 // Keep track of Clock and Reset digital inputs
 GateInArduino gates(NUM_GATES_IN, GATE_PIN);
 
-const MCP4728_channel_t DAC_CH []
-{
-  MCP4728_CHANNEL_D,
-  MCP4728_CHANNEL_B,
-  MCP4728_CHANNEL_A,
-  MCP4728_CHANNEL_C
-};
+hw_timer_t *timer1(nullptr);   // Timer library takes care of telling this where to point
 
 float ONE_OVER_ADC_MAX(0.0);
 
@@ -116,11 +112,17 @@ void calibrate();
 void savePattern();
 void loadPattern();
 
-volatile uint16_t millisTimer(0);
+// Volatile, 'cause we mess with these in ISRs
 volatile uint8_t flashTimer(0);
+volatile uint16_t millisTimer(0);
 
+const uint8_t NUM_DAC_CHANNELS(4);
+MultiChannelDac output(NUM_DAC_CHANNELS);
 
 // This blinks LEDs on and off with different timings to indicate which mode you're in
+// SOLID: set length (get here with a single click)
+// FAST: select pattern to load (get here with a double-click)
+// SLOW: select slot for saving current pattern (get here with a long press)
 uint8_t getFlashTimer()
 {
   uint8_t timerVal;
@@ -166,7 +168,7 @@ void ICACHE_RAM_ATTR onTimer1()
 
 void setup()
 {
-#ifdef CASSIDEBUG
+#ifdef RATDEBUG
   Serial.begin(115200);
   delay(100);
 #endif
@@ -203,19 +205,8 @@ void setup()
   initADC();
   ONE_OVER_ADC_MAX = 1.0f / faderBank[0]->getMax();
 
-  // Set up external 4 channel DAC
-  dbprintln("MCP4728 test...");
-  if (!MCP4728.begin(0x64))
-  {
-    dbprintln("Failed to find MCP4728 chip");
-    while (1) { delay(1); }
-  }
-  dbprintln("MCP4728 chip initialized");
-
-  for (uint8_t ch(0); ch < 4; ++ch)
-  {
-    MCP4728.setChannelValue((MCP4728_channel_t)ch, 0, MCP4728_VREF_INTERNAL);
-  }
+  // Set up DAC
+  output.init();
 
   for (uint8_t fd = 0; fd < NUM_FADERS; ++fd)
   {
@@ -240,61 +231,10 @@ void setup()
   timerAlarmWrite(timer1, ONE_KHZ_MICROS, true);
   timerAlarmEnable(timer1);
 
-  // Uncomment to run manual calibration routine:
-  // calibrate();
-
   // Set pattern LEDs to display current pattern
   setDacRegister(alan.getOutput());
   setFaderRegister(dacRegister & faderLockStateReg);
   leds.clock();
-}
-
-
-// Does what it says on the tin; writes [val] to channel [ch] of external DAC
-void writeRawValToDac(uint8_t ch, uint16_t val)
-{
-  MCP4728.setChannelValue(DAC_CH[ch], val, MCP4728_VREF_INTERNAL, MCP4728_GAIN_2X);
-}
-
-
-// Translates note values to raw DAC outputs using calibration tables
-uint16_t noteToDacVal(uint8_t ch, uint16_t note)
-{
-  // Get the calibration table for this channel
-  const uint16_t *calTable(DAC_CAL_TABLES[DAC_CH[ch]]);
-
-  // Get the octave from the absolute note number
-  uint8_t octave(note / 12);
-  if (octave > CAL_TABLE_HIGH_OCTAVE)
-  {
-    octave = CAL_TABLE_HIGH_OCTAVE;
-  }
-
-  // Use the calibration table to determine how much you'd need to add to the DAC value
-  // in order to go up an octave from the current octave. Divide that by 12 to get the
-  // value of a semitone within the current octave.
-  uint16_t inc(0);
-  if (octave < CAL_TABLE_HIGH_OCTAVE)
-  {
-    inc = calTable[octave + 1] - calTable[octave];
-  }
-  else
-  {
-    inc = calTable[CAL_TABLE_HIGH_OCTAVE] - calTable[CAL_TABLE_HIGH_OCTAVE - 1];
-  }
-  inc /= 12;
-
-  // Determine which semitone we want within the current octave, then multiply that
-  // by the DAC value of a semitone. Add it to the DAC value for the octave and we've
-  // got our output value.
-  uint16_t semiTone(note - (octave * 12));
-  uint16_t setVal(calTable[octave] + inc * semiTone);
-  if (setVal > 4095)
-  {
-    return 4095;
-  }
-
-  return setVal;
 }
 
 
@@ -432,6 +372,7 @@ void iThinkYouShouldLeaf(uint8_t shiftReg)
   for (uint8_t ch(0); ch < NUM_FADERS; ++ch)
   {
     faderVals[ch] = faderBank[ch]->read();
+    dbprintf("Fader %u: %u\n", ch, faderVals[ch]);
     uint8_t channelMask(0x01 << ch);
     for (auto fd(0); fd < 4; ++fd)
     {
@@ -448,16 +389,14 @@ void iThinkYouShouldLeaf(uint8_t shiftReg)
 
   for (auto ch(0); ch < 4; ++ch)
   {
-    uint16_t val(noteToDacVal(ch, noteVals[ch]));
-    // dbprintf("DAC %u note: %u, val: %u\n", ch, noteVals[ch], val);
-    writeRawValToDac(ch, val);
+    output.setChannelNote(ch, noteVals[ch]);
   }
 
   // Translate the note to a 12 bit DAC value, then convert that to an 8 bit value
   // since the internal DAC is only 8 bits
-  uint16_t writeVal_12(noteToDacVal(0, internalDacNote));
-  uint8_t writeVal_8(map(writeVal_12, 0, 4096, 0, 256));
-  voltsExp.outputVoltage(writeVal_8);
+  // uint16_t writeVal_12(noteToDacVal(0, internalDacNote));
+  // uint8_t writeVal_8(map(writeVal_12, 0, 4096, 0, 256));
+  // voltsExp.outputVoltage(writeVal_8);
   // dbprintf("writeVal_8 : %u\n", writeVal_8);
 }
 
@@ -474,6 +413,8 @@ void expandVoltages(uint8_t shiftReg)
   for (uint8_t ch(0); ch < NUM_FADERS; ++ch)
   {
     faderVals[ch] = faderBank[ch]->read();
+    dbprintf("Fader %u: %u\n", ch, faderVals[ch]);
+
     if (bitRead(shiftReg, ch))
     {
       // CV A: Faders & register
@@ -508,9 +449,9 @@ void expandVoltages(uint8_t shiftReg)
   // Write the output values to the external DACs
   for (uint8_t ch(0); ch < 4; ++ch)
   {
-    uint16_t val(noteToDacVal(ch, noteVals[ch]));
-    // dbprintf("DAC %u note: %u, val: %u\n", ch, noteVals[ch], val);
-    writeRawValToDac(ch, val);
+    dbprintf("Channel %u: note %u\n", ch, noteVals[ch]);
+
+    output.setChannelNote(ch, noteVals[ch]);
   }
 
   // Write the inverse of the pattern register to the internal (8 bit) DAC
@@ -563,14 +504,12 @@ void turingStep(int8_t stepAmount)
     set_bit_0 = false;
     uint8_t idx(stepAmount > 0 ? 0 : 7);
     alan.writeBit(idx, 1);
-    // dbprintln("set bit 0");
   }
   else if (clear_bit_0)
   {
     clear_bit_0 = false;
     uint8_t idx(stepAmount > 0 ? 0 : 7);
     alan.writeBit(idx, 0);
-    // dbprintln("clear bit 0");
   }
 
   // Get the Turing register pattern value
@@ -618,12 +557,12 @@ void handleEncoder()
       if (currentMode == mode_type :: PERFORMANCE_MODE)
       {
         dbprintln("perform -> show length");
-        currentMode = CHANGE_LENGTH_MODE;
+        currentMode = mode_type :: CHANGE_LENGTH_MODE;
       }
       else if (currentMode == mode_type :: CHANGE_LENGTH_MODE)
       {
         dbprintf("length = %u -> perform\n", alan.getLength());
-        currentMode = PERFORMANCE_MODE;
+        currentMode = mode_type :: PERFORMANCE_MODE;
       }
       else
       {
@@ -634,12 +573,12 @@ void handleEncoder()
     case encEvnts :: DblClick:
       if (currentMode == mode_type :: PERFORMANCE_MODE)
       {
-        currentMode = PATTERN_LOAD_MODE;
+        currentMode = mode_type :: PATTERN_LOAD_MODE;
       }
       else if (currentMode == mode_type :: PATTERN_LOAD_MODE)
       {
         loadPattern();
-        currentMode = PERFORMANCE_MODE;
+        currentMode = mode_type :: PERFORMANCE_MODE;
       }
       else
       {
@@ -650,12 +589,12 @@ void handleEncoder()
     case encEvnts :: Hold:
       if (currentMode == mode_type :: PERFORMANCE_MODE)
       {
-        currentMode = PATTERN_SAVE_MODE;
+        currentMode = mode_type :: PATTERN_SAVE_MODE;
       }
       else if (currentMode == mode_type :: PATTERN_SAVE_MODE)
       {
         savePattern();
-        currentMode = PERFORMANCE_MODE;
+        currentMode = mode_type :: PERFORMANCE_MODE;
       }
       else
       {
@@ -834,54 +773,3 @@ void loadPattern()
   regLedsDirty = 1;
 }
 
-
-// Allows you to fine-tune the output of each individual DAC channel using all eight faders.
-// Save the values you get and use them to populate the calibration data in TMOC_HW.h
-void calibrate()
-{
-  uint8_t selch(0);
-  uint8_t selreg(1);
-  leds.tempWrite(1, 0);
-  leds.tempWrite(1, 1);
-
-  uint16_t outval(0);
-  faderBank[selch]->selectActiveBank(0);
-  dbprintf("ch: %u\n", selch);
-  while (true)
-  {
-    if (writeHigh.readAndFree())
-    {
-      writeRawValToDac(selch, 0);
-      ++selch;
-
-      if (selch == 4)
-      {
-        selch = 0;
-      }
-
-      selreg = 0 | (1 << selch);
-      faderBank[selch]->selectActiveBank(0);
-      leds.tempWrite(selreg, 0);
-      leds.tempWrite(selreg, 1);
-      dbprintf("ch: %u\n", selch);
-    }
-
-    outval = 0;
-    for (uint8_t bn(0); bn < 8; ++bn)
-    {
-      outval += faderBank[sliderMap[bn]]->read() >> (1 + bn);
-    }
-    if (outval > 4095)
-    {
-      outval = 4095;
-    }
-    MCP4728.setChannelValue(DAC_CH[selch],
-                            outval,
-                            MCP4728_VREF_INTERNAL,
-                            MCP4728_GAIN_2X);
-    if (writeLow.readAndFree())
-    {
-      dbprintf("%u\n", outval);
-    }
-  }
-}
