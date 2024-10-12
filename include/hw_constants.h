@@ -1,10 +1,9 @@
 #pragma once
 
 #include <Arduino.h>
-#include "MCP_ADC.h"
-#include "SharedCtrl.h"
-#include <ClickEncoder.h>
-#include <ClickEncoderInterface.h>
+
+const uint16_t uS_TO_mS(1000);
+const uint16_t ONE_KHZ_MICROS(uS_TO_mS); // 1000 uS for 1khz timer cycle for encoder
 
 // NOTE: GPIO34 doesn't have a pullup; I had to add a HW one
 const uint8_t LED_SR_CS         (2);
@@ -48,7 +47,8 @@ const uint8_t ENC_STEPS_PER_NOTCH   (4);
 const uint8_t NUM_GATES_IN          (2);
 const uint8_t GATE_PIN[NUM_GATES_IN]{CLOCK_IN, RESET_IN};
 
-const uint16_t uS_TO_mS(1000);
-#define ONE_KHZ_MICROS uS_TO_mS // 1000 uS for 1khz timer cycle for encoder
+const uint8_t NUM_DAC_CHANNELS(4);
 
 extern uint8_t currentBank;
+
+const uint8_t NUM_BANKS             (8);

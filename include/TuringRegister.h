@@ -10,9 +10,8 @@
 #include <Arduino.h>
 #include <bitHelpers.h>
 #include <MagicButton.h>
-#include <ESP32AnalogRead.h>
 #include <vector>
-
+#include "stoch.h"
 
 const uint8_t NUM_STEP_LENGTHS(13);
 const uint8_t STEP_LENGTH_VALS[NUM_STEP_LENGTHS]{2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 16};
@@ -21,11 +20,11 @@ const uint8_t STEP_LENGTH_VALS[NUM_STEP_LENGTHS]{2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
 class TuringRegister
 {
 public:
-  TuringRegister(
-    ESP32AnalogRead *voltage,
-    ESP32AnalogRead *cv);
+  TuringRegister(Stochasticizer& stoch);
 
   ~TuringRegister();
+
+  uint8_t pulseIt();
 
   // Returns a register with the first [len] bits of [reg] copied into it
   // enough times to fill it to the end
@@ -35,8 +34,8 @@ public:
   uint8_t iterate(int8_t steps);
 
   // Rotates the working register back to step 0
+  void returnToZero();
   void reset();
-  void rotateToCurrentStep();
   void lengthPLUS();
   void lengthMINUS();
 
@@ -53,27 +52,14 @@ public:
 
   void writeBit(uint8_t idx, bool bitVal);
   void writeToRegister(uint16_t fillVal, uint8_t bankNum);
-  void loadPattern(uint8_t bankIdx, bool saveFirst = false);
+  void loadPattern();
   void savePattern(uint8_t bankIdx);
   void reAnchor() { offset_ = 0; }
+  bool setNextPattern(uint8_t loadSlot);
+
+  uint8_t getDrunkenIndex();
 
 protected:
-
-  struct Stochasticizer
-  {
-    float THRESH_LOW;
-    float THRESH_HIGH;
-
-    ESP32AnalogRead * const pVolts;
-    ESP32AnalogRead * const pCV;
-
-    Stochasticizer(
-      ESP32AnalogRead * const voltage,
-      ESP32AnalogRead * const cv);
-
-    bool stochasticize(const bool startVal) const;
-  };
-
   Stochasticizer        stoch_;
 
   bool                  inReverse_;
@@ -91,6 +77,10 @@ protected:
 
   const uint8_t         NUM_PATTERNS;
   uint8_t               currentBankIdx_;
+  uint8_t               nextPattern_;
+  bool                  newLoadPending_;
+  int8_t                drunkStep_;
+
 };
 
 

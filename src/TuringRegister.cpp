@@ -13,62 +13,20 @@
 Preferences prefs;
 
 
-TuringRegister :: Stochasticizer :: Stochasticizer(
-  ESP32AnalogRead * const voltage,
-  ESP32AnalogRead * const cv):
-    THRESH_LOW(265.0),
-    THRESH_HIGH(3125.0),
-    pVolts(voltage),
-    pCV(cv)
-{ ; }
-
-
-// Coin-toss algorithm; uses knob position to determine likelihood of flipping a
-// bit or leaving it untouched
-bool TuringRegister :: Stochasticizer :: stochasticize(const bool startVal) const
-{
-  float prob(pVolts->readMiliVolts());
-  if (prob > THRESH_HIGH)
-  {
-    if (pCV->readMiliVolts() > 500)
-    {
-      return !startVal;
-    }
-    return startVal;
-  }
-
-  if (prob < THRESH_LOW)
-  {
-    if (pCV->readMiliVolts() > 500)
-    {
-      return startVal;
-    }
-    return !startVal;
-  }
-
-  float result(float(random(0, 3135)));
-  if (result > prob)
-  {
-    return !startVal;
-  }
-
-  return startVal;
-}
-
-
 // Class to hold and manipulate sequencer shift register patterns
-TuringRegister :: TuringRegister(
-  ESP32AnalogRead * const voltage,
-  ESP32AnalogRead * const cv):
+TuringRegister::TuringRegister(Stochasticizer& stoch):
     inReverse_      (0),
     offset_         (0),
     resetPending_   (0),
     workingRegister (0),
     stepCountIdx_   (6),
-    stoch_(Stochasticizer(voltage, cv)),
+    stoch_          (stoch),
     NUM_PATTERNS    (8),
     currentBankIdx_ (0),
-    pPatternLength(&lengthsBank[0])
+    pPatternLength  (&lengthsBank[0]),
+    nextPattern_    (currentBankIdx_),
+    newLoadPending_ (0),
+    drunkStep_      (0)
 {
   lengthsBank.reserve(NUM_PATTERNS);
   patternBank.reserve(NUM_PATTERNS);
@@ -85,13 +43,13 @@ TuringRegister :: TuringRegister(
 }
 
 
-TuringRegister :: ~TuringRegister()
+TuringRegister::~TuringRegister()
 { ; }
 
 
 // Returns a register with the first [len] bits of [reg] copied into it
 // enough times to fill it to the end
-uint16_t TuringRegister :: norm(uint16_t reg, uint8_t len) const
+uint16_t TuringRegister::norm(uint16_t reg, uint8_t len) const
 {
   uint16_t ret(0);
   uint8_t idx(0);
@@ -118,26 +76,35 @@ uint16_t TuringRegister :: norm(uint16_t reg, uint8_t len) const
 
 
 // Shifts register, returns current step [i.e. prior to advancing]
-uint8_t TuringRegister :: iterate(int8_t steps)
+uint8_t TuringRegister::iterate(int8_t steps)
 {
-  // dbprintf("%s shift %u steps %s\n",
-  //          passive ? "passive" : "active",
-  //          steps > 0 ? steps : -steps,
-  //          steps > 0 ? "forward" : "backward");
-
+  // Handle pending reset (if applicable)
+  bool resat(false);
   if (resetPending_)
   {
     resetPending_ = false;
-    offset_       = steps;
+    returnToZero();
+    offset_       = 0;
+    resat = true;
+  }
+
+  // Load new patterns on the downbeat
+  if (newLoadPending_ && offset_ == 0)
+  {
+    loadPattern();
+  }
+
+  if (resat)
+  {
     return 0;
   }
 
+  // Shift LEFT on positive steps; RIGHT on negative steps
   uint8_t leftAmt;
   uint8_t rightAmt;
 
   int8_t  readIdx;
   uint8_t writeIdx;
-
   if (steps > 0)  // Advance pattern
   {
     leftAmt   = 1;
@@ -158,6 +125,7 @@ uint8_t TuringRegister :: iterate(int8_t steps)
     writeIdx = 7;
   }
 
+  // Update register
   bool writeVal(bitRead(workingRegister, readIdx));
   workingRegister = (workingRegister << leftAmt) | \
                     (workingRegister >> rightAmt);
@@ -176,32 +144,54 @@ uint8_t TuringRegister :: iterate(int8_t steps)
 }
 
 
-// Rotates the working register back to step 0
-void TuringRegister :: reset()
+// Selects a new pattern to load on the downbeat. If you select the current
+// slot, it will reload it, effectively undoing any changes
+bool TuringRegister::setNextPattern(uint8_t loadSlot)
 {
-  offset_ = -offset_;
-  rotateToCurrentStep();
-  offset_ = -offset_;
+  newLoadPending_ = true;
+  loadSlot %= NUM_PATTERNS;
+  nextPattern_ = loadSlot;
+  return newLoadPending_;
+}
+
+
+void TuringRegister::returnToZero()
+{
+  uint8_t rightshift(0);
+  uint8_t leftshift(0);
+  if (offset_ > 0)
+  {
+    rightshift = offset_;
+    leftshift = (16 - offset_);
+  }
+  else if(offset_ < 0)
+  {
+    leftshift = -offset_;
+    rightshift = (16 + offset_);
+  }
+
+  if (leftshift == 16)
+  {
+    leftshift = 0 ;
+  }
+
+  if (rightshift == 16)
+  {
+    rightshift = 0;
+  }
+
+  workingRegister = (workingRegister >> rightshift) | \
+                    (workingRegister << leftshift);
+}
+
+
+void TuringRegister::reset()
+{
   resetPending_ = true;
 }
 
 
-void TuringRegister :: rotateToCurrentStep()
-{
-  if (offset_ > 0)
-  {
-    workingRegister = (workingRegister << offset_) | \
-                      (workingRegister >> (16 - offset_));
-  }
-  else if (offset_ < 0)
-  {
-    workingRegister = (workingRegister >> -offset_) | \
-                      (workingRegister << (16 + offset_));
-  }
-}
-
-
-void TuringRegister :: lengthPLUS()
+void TuringRegister::lengthPLUS()
 {
   if (stepCountIdx_ == NUM_STEP_LENGTHS - 1)
   {
@@ -212,7 +202,7 @@ void TuringRegister :: lengthPLUS()
 }
 
 
-void TuringRegister :: lengthMINUS()
+void TuringRegister::lengthMINUS()
 {
   if (stepCountIdx_ == 0)
   {
@@ -223,44 +213,31 @@ void TuringRegister :: lengthMINUS()
 }
 
 
-void TuringRegister :: writeBit(const uint8_t idx, const bool bitVal)
+void TuringRegister::writeBit(const uint8_t idx, const bool bitVal)
 {
   bitWrite(workingRegister, idx, bitVal);
 }
 
 
-void TuringRegister :: writeToRegister(const uint16_t fillVal, const uint8_t bankNum)
+void TuringRegister::writeToRegister(const uint16_t fillVal, const uint8_t bankNum)
 {
   patternBank[bankNum] = fillVal;
 }
 
 
-void TuringRegister :: loadPattern(const uint8_t bankIdx, const bool saveFirst)
+void TuringRegister::loadPattern()
 {
-  // Rotate working register [offset_] steps RIGHT back to step 0
-  bool pr(resetPending_);
-
-  reset();
-
-  // Clear this flag if it wasn't already set
-  resetPending_  = pr;
-
-  if (saveFirst)
-  {
-    patternBank[currentBankIdx_] = workingRegister;
-  }
-
   // Move pattern pointer to selected bank and copy its contents into working register
-  currentBankIdx_ = bankIdx % NUM_PATTERNS;
+  currentBankIdx_ = nextPattern_;
   pShiftReg       = &patternBank[currentBankIdx_];
   workingRegister = *pShiftReg;
   pPatternLength  = &lengthsBank[currentBankIdx_];
-  offset_ %= *pPatternLength;
-  rotateToCurrentStep();
+  offset_        %= *pPatternLength;
+  newLoadPending_ = false;
 }
 
 
-void TuringRegister :: savePattern(uint8_t bankIdx)
+void TuringRegister::savePattern(uint8_t bankIdx)
 {
   // Rotate working register to step 0
   uint16_t workingRegCopy(workingRegister);
@@ -278,7 +255,68 @@ void TuringRegister :: savePattern(uint8_t bankIdx)
   printBits(lengthsBank[bankIdx]);
 }
 
+// Make the trigger outputs do something interesting. Ideally, they'll all be related to
+// the main pattern register, but still different enough to justify having 8 of them.
+// I messed around with a bunch of different bitwise transformations and eventually came
+// across a few that I think sound cool.
+uint8_t TuringRegister::pulseIt()
+{
+  // Bit 0 from shift register; Bit 1 is !Bit 0
+  uint8_t inputReg(static_cast<uint8_t>(workingRegister & 0xFF));
 
+  uint8_t outputReg(inputReg & BIT0);
+  outputReg |= (~outputReg << 1) & BIT1;
+
+  outputReg |= ((((inputReg & BIT0) >> 0) & ((inputReg & BIT3) >> 3)) << 2) & BIT2;
+  outputReg |= ((((inputReg & BIT2) >> 2) & ((inputReg & BIT7) >> 7)) << 3) & BIT3;
+
+  outputReg |= (((inputReg & BIT1) >> 1) ^ ((inputReg & BIT6) >> 6) << 4) & BIT4;
+  outputReg |= (((inputReg & BIT0) >> 0) ^ ((inputReg & BIT4) >> 4) << 5) & BIT5;
+  outputReg |= (((inputReg & BIT3) >> 3) ^ ((inputReg & BIT7) >> 7) << 6) & BIT6;
+  outputReg |= (((inputReg & BIT2) >> 2) ^ ((inputReg & BIT5) >> 5) << 7) & BIT7;
+
+  return outputReg;
+}
+
+
+// "Drunken Walk" algorithm - randomized melodies but notes tend to cluster together
+// TODO: Once this is implemented as a sequencer mode, add control over the degree of
+// deviation
+uint8_t TuringRegister::getDrunkenIndex()
+{
+  // How big of a step are we taking?
+  int8_t rn(random(0, 101));
+  if (rn > 90)
+  {
+    rn = 3;
+  }
+  else if (rn > 70)
+  {
+    rn = 2;
+  }
+  else
+  {
+    rn = 1;
+  }
+
+  // Are we stepping forward or backward?
+  if (random(0, 2))
+  {
+    rn *= -1;
+  }
+
+  drunkStep_ += rn;
+  if (drunkStep_ < 0)
+  {
+    drunkStep_ += 8;
+  }
+  else if (drunkStep_ > 7)
+  {
+    drunkStep_ -= 8;
+  }
+
+  return drunkStep_;
+}
 // TODO: incorporate this stuff:
 
 // void savePatternToFlash(uint8_t slot)
