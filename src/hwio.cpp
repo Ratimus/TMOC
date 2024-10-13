@@ -46,7 +46,6 @@ void expandVoltages(uint8_t shiftReg)
   for (uint8_t ch(0); ch < NUM_FADERS; ++ch)
   {
     faderVals[ch] = faderBank[ch]->read();
-    dbprintf("Fader %u: %u\n", ch, faderVals[ch]);
 
     if (bitRead(shiftReg, ch))
     {
@@ -58,7 +57,6 @@ void expandVoltages(uint8_t shiftReg)
       // CV B: Faders & ~register
       noteVals[1] += faderVals[ch];
     }
-    // dbprintf("Fader %u: %u\n", ch, faderVals[ch]);
   }
 
   // CV C: abs(CV A - CV B)
@@ -82,15 +80,12 @@ void expandVoltages(uint8_t shiftReg)
   // Write the output values to the external DACs
   for (uint8_t ch(0); ch < 4; ++ch)
   {
-    dbprintf("Channel %u: note %u\n", ch, noteVals[ch]);
-
     output.setChannelNote(ch, noteVals[ch]);
   }
 
   // Write the inverse of the pattern register to the internal (8 bit) DAC
   uint8_t writeVal_8(~shiftReg);
   voltsExp.outputVoltage(writeVal_8);
-  // dbprintf("writeVal_8 : %u\n", writeVal_8);
 }
 
 // void huh(uint8_t ch)

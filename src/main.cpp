@@ -14,15 +14,11 @@
 // Ryan "Ratimus" Richardson
 // ------------------------------------------------------------------------
 
-// define RATDEBUG to enable Serial printing (and whatever else) - see RatFuncs.h
-// #ifndef RATDEBUG
-// #define RATDEBUG
-// #endif
 
 #include <Arduino.h>
+#include <RatFuncs.h>
 #include <Wire.h>
 #include "hw_constants.h"
-#include <RatFuncs.h>
 #include "OutputDac.h"
 #include <CtrlPanel.h>
 #include <bitHelpers.h>
@@ -35,6 +31,7 @@
 #include "leds.h"
 
 
+void handleMode(ModeCommand modeCmd);
 void savePattern(uint8_t saveSlot);
 void loadPattern(uint8_t loadSlot);
 
@@ -80,16 +77,16 @@ void onClock(int8_t stepAmount)
 
   // Get the Turing register pattern value
   dacRegister = alan.getOutput();
-  regLedsDirty = 1;
 
-  // // Update all the various outputs
-  // expandVoltages(dacRegister);
-  // setFaderRegister(dacRegister & faderLockStateReg);
+  // Update all the various outputs
+  expandVoltages(dacRegister);
+  setFaderRegister(dacRegister & faderLockStateReg);
   setTrigRegister(alan.pulseIt());
+
   triggers.clock();
+  leds.clock();
 }
 
-void handleMode(ModeCommand modeCmd);
 
 // TODO: I updated my MagicButton class a while ago to only register a 'Held' state after you
 // release, so I need to bring that back as an option if I want it to function that way
@@ -106,8 +103,6 @@ void loop()
   {
     triggers.allOff();
   }
-
-  updateRegLeds();
 
   // Double-click to change fader octave range (1 to 3 octaves)
   ButtonState clickies[]{ writeLow.readAndFree(), writeHigh.readAndFree() };
@@ -148,13 +143,19 @@ void loop()
     leds.tempWrite(dacRegister & faderLockStateReg);
   }
 
-  handleMode(mode.update());
+  ModeCommand modeCmd(mode.update());
+  handleMode(modeCmd);
+  updateRegLeds();
 }
 
 
 void handleMode(ModeCommand modeCmd)
 {
-  regLedsDirty = 1;
+  if(modeCmd.cmd == command_enum::NO_CMD)
+  {
+    return;
+  }
+
   switch(modeCmd.cmd)
   {
     case command_enum::CHANGEMODE:
@@ -195,7 +196,6 @@ void handleMode(ModeCommand modeCmd)
 
     case command_enum::NO_CMD:
     default:
-      regLedsDirty = 0;
       break;
   }
 }
@@ -210,7 +210,6 @@ void savePattern(uint8_t saveSlot)
   }
   alan.savePattern(saveSlot);
   dacRegister = alan.getOutput();
-  regLedsDirty = 1;
 }
 
 
@@ -224,7 +223,6 @@ void loadPattern(uint8_t loadSlot)
   }
   dacRegister = alan.getOutput();
   currentBank = loadSlot;
-  regLedsDirty = 1;
   patternPending = -1;
 }
 

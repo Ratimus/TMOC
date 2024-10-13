@@ -131,13 +131,19 @@ ModeCommand ModeControl::left()
       return {command_enum::LENGTH, -1};
 
     case mode_type::PATTERN_LOAD_MODE:
-      ++loadSlot_;
-      loadSlot_ %= NUM_BANKS;
+      --loadSlot_;
+      if (loadSlot_ < 0)
+      {
+        loadSlot_ += NUM_BANKS;
+      }
       return {command_enum::LEDS, 1};
 
     case mode_type::PATTERN_SAVE_MODE:
-      ++saveSlot_;
-      saveSlot_ %= NUM_BANKS;
+      --saveSlot_;
+      if (saveSlot_ < 0)
+      {
+        saveSlot_ += NUM_BANKS;
+      }
       return {command_enum::LEDS, 1};
 
     default:
