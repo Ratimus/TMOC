@@ -96,6 +96,7 @@ uint8_t TuringRegister::iterate(int8_t steps)
 
   if (resat)
   {
+    dbprintf("Resat to step %d\n", offset_);
     return 0;
   }
 
@@ -129,7 +130,8 @@ uint8_t TuringRegister::iterate(int8_t steps)
   bool writeVal(bitRead(workingRegister, readIdx));
   workingRegister = (workingRegister << leftAmt) | \
                     (workingRegister >> rightAmt);
-  writeVal = stoch_.stochasticize(writeVal);
+  //writeVal = stoch_.stochasticize(writeVal);
+  //debug
 
   bitWrite(workingRegister, writeIdx, writeVal);
   uint8_t retVal(offset_);
@@ -140,7 +142,8 @@ uint8_t TuringRegister::iterate(int8_t steps)
     offset_ = 0;
   }
 
-  return retVal;
+  dbprintf("Step %d\n", offset_);
+  return offset_;
 }
 
 
@@ -187,6 +190,17 @@ void TuringRegister::returnToZero()
 
 void TuringRegister::reset()
 {
+  while (offset_)
+  {
+    if (offset_ < 0)
+    {
+      iterate(1);
+    }
+    else
+    {
+      iterate(-1);
+    }
+  }
   resetPending_ = true;
 }
 
@@ -210,6 +224,7 @@ void TuringRegister::lengthMINUS()
   }
   --stepCountIdx_;
   pPatternLength = &STEP_LENGTH_VALS[stepCountIdx_];
+  offset_       %= *pPatternLength;
 }
 
 

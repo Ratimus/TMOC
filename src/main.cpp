@@ -13,7 +13,6 @@
 // Nov. 2022
 // Ryan "Ratimus" Richardson
 // ------------------------------------------------------------------------
-
 #include <Arduino.h>
 #include <RatFuncs.h>
 #include <Wire.h>
@@ -27,30 +26,197 @@
 #include "hwio.h"
 #include "setup.h"
 #include "leds.h"
+#include "toggle.h"
 
 #define RESET_FLAG 1
 #define CLOCK_FLAG 0
-
-
-void handleMode(ModeCommand modeCmd);
-void savePattern(uint8_t saveSlot);
-void loadPattern(uint8_t loadSlot);
 
 void setup()
 {
   setThingsUp();
 }
 
-// Got an external clock pulse? Do the thing
-void onClock(int8_t stepAmount)
+void handleMode(ModeCommand modeCmd);
+void savePattern(uint8_t saveSlot);
+void loadPattern(uint8_t loadSlot);
+void handleToggle(toggle_cmd cmd);
+void onClock(int8_t stepAmount, bool & reset);
+
+
+// TODO: I updated my MagicButton class a while ago to only register a 'Held' state after you
+// release, so I need to bring that back as an option if I want it to function that way
+void loop()
 {
-  // Handle a pending reset
-  if (gates.readRiseFlag(RESET_FLAG))
+  static bool pendingReset(1);
+  static bool resetCleared(0);
+
+  pendingReset |= gates.readRiseFlag(RESET_FLAG);
+  //debug
+  toggle_cmd toggleCmd(updateToggle());
+
+  if (toggleCmd == toggle_cmd::LESS_OCTAVES)
+  {
+    pendingReset |= true;
+  }
+
+  if (pendingReset)
   {
     dbprintf("RESET!!!\n");
     alan.reset();
+    uint8_t tmp(alan.getOutput());
+    setFaderRegister(tmp & faderLockStateReg);
+    if (mode.currentMode() == mode_type::PERFORMANCE_MODE)
+    {
+      setDacRegister(tmp);
+    }
+    updateRegLeds();
+    pendingReset = false;
+    resetCleared = true;
   }
 
+  if (toggleCmd == toggle_cmd::CLEAR_BIT)
+  {
+    dbprintf("!KCOLC\n");
+    onClock(-1, resetCleared);
+
+  }
+
+  if (toggleCmd == toggle_cmd::SET_BIT)
+  {
+    dbprintf("CLOCK!\n");
+    onClock(1, resetCleared);
+  }
+
+
+  //debug
+  //if (gates.readRiseFlag(CLOCK_FLAG))
+  // {
+  //   dbprintf("CLOCK!\n");
+  //   // Single clicks on the toggle will set/clear the next bit, but we also want to
+  //   // be able to hold it down and write or clear the entire register
+  //   onClock((cvB.readRaw() > 2047) ? -1 : 1);
+  // }
+  // else if (gates.readFallFlag(CLOCK_FLAG))
+  // {
+  //   triggers.allOff();
+  // }
+
+  //toggle_cmd toggleCmd(updateToggle());
+  //handleToggle(toggleCmd);
+
+  for (uint8_t fd = 0; fd < NUM_FADERS; ++fd)
+  {
+    faderBank[fd]->read();
+    bitWrite(faderLockStateReg,
+             fd,
+             faderBank[fd]->getLockState() == LockState :: STATE_UNLOCKED);
+    leds.tempWrite(dacRegister & faderLockStateReg);
+  }
+
+  ModeCommand modeCmd(mode.update());
+  handleMode(modeCmd);
+  updateRegLeds();
+}
+
+
+void handleToggle(toggle_cmd cmd)
+{
+  switch(cmd)
+  {
+    case toggle_cmd::MORE_OCTAVES:
+      if (OctaveRange > 1)
+      {
+        --OctaveRange;
+        setRange(OctaveRange);
+      }
+      break;
+
+    case toggle_cmd::LESS_OCTAVES:
+      if (OctaveRange < 3)
+      {
+        ++OctaveRange;
+        setRange(OctaveRange);
+      }
+      break;
+
+    case toggle_cmd::CLEAR_BIT:
+      clear_bit_0 = true;
+      break;
+
+    case toggle_cmd::SET_BIT:
+      set_bit_0 = true;
+      break;
+
+    case toggle_cmd::EXIT:
+      mode.cancel();
+      break;
+
+    case toggle_cmd::NO:
+    default:
+      break;
+  }
+}
+
+
+void handleMode(ModeCommand modeCmd)
+{
+  if(modeCmd.cmd == command_enum::NO_CMD)
+  {
+    return;
+  }
+
+  switch(modeCmd.cmd)
+  {
+    case command_enum::CHANGEMODE:
+      break;
+
+    case command_enum::STEP:
+      if (modeCmd.val < 0)
+      {
+        alan.iterate(-1);
+      }
+      else
+      {
+        alan.iterate(1);
+      }
+      // This only happens in mode_type::PERFORMANCE_MODE, so no need to check
+      setDacRegister(alan.getOutput());
+      setFaderRegister(alan.getOutput() & faderLockStateReg);
+      updateRegLeds();
+      break;
+
+    case command_enum::LOAD:
+      patternPending = modeCmd.val;
+      break;
+
+    case command_enum::SAVE:
+      savePattern(modeCmd.val);
+      break;
+
+    case command_enum::LENGTH:
+      if (modeCmd.val < 0)
+      {
+        alan.lengthMINUS();
+      }
+      else
+      {
+        alan.lengthPLUS();
+      }
+      break;
+
+    case command_enum::LEDS:
+      break;
+
+    case command_enum::NO_CMD:
+    default:
+      break;
+  }
+}
+
+
+// Got an external clock pulse? Do the thing
+void onClock(int8_t stepAmount, bool & reset)
+{
   // Iterate the sequencer to the next state
   int8_t alanStep(alan.iterate(stepAmount));
   if (alanStep == 0 && patternPending >= 0)
@@ -81,121 +247,10 @@ void onClock(int8_t stepAmount)
   setTrigRegister(alan.pulseIt());
 
   triggers.clock();
+
   leds.clock();
 }
 
-
-// TODO: I updated my MagicButton class a while ago to only register a 'Held' state after you
-// release, so I need to bring that back as an option if I want it to function that way
-void loop()
-{
-  if (gates.readRiseFlag(CLOCK_FLAG))
-  {
-    dbprintf("CLOCK!\n");
-    // Single clicks on the toggle will set/clear the next bit, but we also want to
-    // be able to hold it down and write or clear the entire register
-    onClock((cvB.readRaw() > 2047) ? -1 : 1);
-  }
-  else if (gates.readFallFlag(CLOCK_FLAG))
-  {
-    triggers.allOff();
-  }
-
-  // Double-click to change fader octave range (1 to 3 octaves)
-  ButtonState clickies[]{ writeLow.readAndFree(), writeHigh.readAndFree() };
-  if ((OctaveRange > 1) && (clickies[0] == ButtonState :: DoubleClicked))
-  {
-    --OctaveRange;
-    setRange(OctaveRange);
-  }
-  else if ((OctaveRange < 3) && (clickies[1] == ButtonState :: DoubleClicked))
-  {
-    ++OctaveRange;
-    setRange(OctaveRange);
-  }
-
-  // Single click to set/clear BIT0
-  if (clickies[0] == ButtonState :: Clicked || clickies[0] == ButtonState :: Held)
-  {
-      clear_bit_0 = true;
-  }
-  else if (clickies[1] == ButtonState :: Clicked || clickies[1] == ButtonState :: Held)
-  {
-    if (mode.currentMode() == mode_type :: PERFORMANCE_MODE)
-    {
-      set_bit_0 = true;
-    }
-    else
-    {
-      mode.cancel();
-    }
-  }
-
-  for (uint8_t fd = 0; fd < NUM_FADERS; ++fd)
-  {
-    faderBank[fd]->read();
-    bitWrite(faderLockStateReg,
-             fd,
-             faderBank[fd]->getLockState() == LockState :: STATE_UNLOCKED);
-    leds.tempWrite(dacRegister & faderLockStateReg);
-  }
-
-  ModeCommand modeCmd(mode.update());
-  handleMode(modeCmd);
-  updateRegLeds();
-}
-
-
-void handleMode(ModeCommand modeCmd)
-{
-  if(modeCmd.cmd == command_enum::NO_CMD)
-  {
-    return;
-  }
-
-  switch(modeCmd.cmd)
-  {
-    case command_enum::CHANGEMODE:
-      break;
-
-    case command_enum::STEP:
-      if (modeCmd.val < 0)
-      {
-        onClock(-1);
-      }
-      else
-      {
-        onClock(1);
-      }
-      break;
-
-    case command_enum::LOAD:
-      patternPending = modeCmd.val;
-      break;
-
-    case command_enum::SAVE:
-      savePattern(modeCmd.val);
-      break;
-
-    case command_enum::LENGTH:
-      if (modeCmd.val < 0)
-      {
-        alan.lengthMINUS();
-      }
-      else
-      {
-        alan.lengthPLUS();
-      }
-      break;
-
-    case command_enum::LEDS:
-      break;
-
-    case command_enum::NO_CMD:
-    default:
-      break;
-  }
-}
 
 // Saves the pattern register, pattern length, and current fader locations to the selected slot
 void savePattern(uint8_t saveSlot)
