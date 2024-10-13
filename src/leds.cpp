@@ -90,9 +90,15 @@ void updateMainLeds()
   }
 }
 
-
-void updateRegLeds()
+void updateRegLeds(bool en)
 {
+  if (!en)
+  {
+    leds.setReg(0, 0);
+    leds.setReg(0,1);
+    leds.clock();
+    return;
+  }
   updateFaderLeds();
   updateMainLeds();
   if (!leds.pending())

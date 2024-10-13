@@ -27,6 +27,9 @@
 #include "setup.h"
 #include "leds.h"
 #include "toggle.h"
+#include "timers.h"
+
+#define DEBUG_CLOCK
 
 #define RESET_FLAG 1
 #define CLOCK_FLAG 0
@@ -45,6 +48,8 @@ void onClock(int8_t stepAmount, bool & reset);
 
 // TODO: I updated my MagicButton class a while ago to only register a 'Held' state after you
 // release, so I need to bring that back as an option if I want it to function that way
+auto enableLeds = one_shot(0);
+
 void loop()
 {
   static bool pendingReset(1);
@@ -52,12 +57,15 @@ void loop()
 
   pendingReset |= gates.readRiseFlag(RESET_FLAG);
   //debug
+
+  #ifdef DEBUG_CLOCK
   toggle_cmd toggleCmd(updateToggle());
 
   if (toggleCmd == toggle_cmd::LESS_OCTAVES)
   {
     pendingReset |= true;
   }
+  #endif
 
   if (pendingReset)
   {
@@ -74,11 +82,11 @@ void loop()
     resetCleared = true;
   }
 
+  #ifdef DEBUG_CLOCK
   if (toggleCmd == toggle_cmd::CLEAR_BIT)
   {
     dbprintf("!KCOLC\n");
     onClock(-1, resetCleared);
-
   }
 
   if (toggleCmd == toggle_cmd::SET_BIT)
@@ -86,23 +94,24 @@ void loop()
     dbprintf("CLOCK!\n");
     onClock(1, resetCleared);
   }
-
+  #else
 
   //debug
-  //if (gates.readRiseFlag(CLOCK_FLAG))
-  // {
-  //   dbprintf("CLOCK!\n");
-  //   // Single clicks on the toggle will set/clear the next bit, but we also want to
-  //   // be able to hold it down and write or clear the entire register
-  //   onClock((cvB.readRaw() > 2047) ? -1 : 1);
-  // }
-  // else if (gates.readFallFlag(CLOCK_FLAG))
-  // {
-  //   triggers.allOff();
-  // }
+  if (gates.readRiseFlag(CLOCK_FLAG))
+  {
+    dbprintf("CLOCK!\n");
+    // Single clicks on the toggle will set/clear the next bit, but we also want to
+    // be able to hold it down and write or clear the entire register
+    onClock((cvB.readRaw() > 2047) ? -1 : 1, resetCleared);
+  }
+  else if (gates.readFallFlag(CLOCK_FLAG))
+  {
+    triggers.allOff();
+  }
 
-  //toggle_cmd toggleCmd(updateToggle());
-  //handleToggle(toggleCmd);
+  toggle_cmd toggleCmd(updateToggle());
+  handleToggle(toggleCmd);
+  #endif
 
   for (uint8_t fd = 0; fd < NUM_FADERS; ++fd)
   {
@@ -115,7 +124,50 @@ void loop()
 
   ModeCommand modeCmd(mode.update());
   handleMode(modeCmd);
-  updateRegLeds();
+  updateRegLeds(enableLeds());
+}
+
+
+// Got an external clock pulse? Do the thing
+void onClock(int8_t stepAmount, bool & reset)
+{
+  // Iterate the sequencer to the next state
+  int8_t alanStep(alan.iterate(stepAmount));
+  if (alanStep == 0 && patternPending >= 0)
+  {
+    loadPattern(patternPending);
+  }
+
+  // Handle the write/clear toggle switch
+  if (set_bit_0)
+  {
+    set_bit_0 = false;
+    uint8_t idx(stepAmount > 0 ? 0 : 7);
+    alan.writeBit(idx, 1);
+  }
+  else if (clear_bit_0)
+  {
+    clear_bit_0 = false;
+    uint8_t idx(stepAmount > 0 ? 0 : 7);
+    alan.writeBit(idx, 0);
+  }
+
+  // Get the Turing register pattern value
+  dacRegister = alan.getOutput();
+
+  // Update all the various outputs
+  expandVoltages(dacRegister);
+  setFaderRegister(dacRegister & faderLockStateReg);
+  setTrigRegister(alan.pulseIt());
+
+  triggers.clock();
+  if (reset)
+  {
+    reset = false;
+    enableLeds = one_shot(100);
+    return;
+  }
+  leds.clock();
 }
 
 
@@ -211,44 +263,6 @@ void handleMode(ModeCommand modeCmd)
     default:
       break;
   }
-}
-
-
-// Got an external clock pulse? Do the thing
-void onClock(int8_t stepAmount, bool & reset)
-{
-  // Iterate the sequencer to the next state
-  int8_t alanStep(alan.iterate(stepAmount));
-  if (alanStep == 0 && patternPending >= 0)
-  {
-    loadPattern(patternPending);
-  }
-
-  // Handle the write/clear toggle switch
-  if (set_bit_0)
-  {
-    set_bit_0 = false;
-    uint8_t idx(stepAmount > 0 ? 0 : 7);
-    alan.writeBit(idx, 1);
-  }
-  else if (clear_bit_0)
-  {
-    clear_bit_0 = false;
-    uint8_t idx(stepAmount > 0 ? 0 : 7);
-    alan.writeBit(idx, 0);
-  }
-
-  // Get the Turing register pattern value
-  dacRegister = alan.getOutput();
-
-  // Update all the various outputs
-  expandVoltages(dacRegister);
-  setFaderRegister(dacRegister & faderLockStateReg);
-  setTrigRegister(alan.pulseIt());
-
-  triggers.clock();
-
-  leds.clock();
 }
 
 

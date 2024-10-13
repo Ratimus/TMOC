@@ -96,7 +96,6 @@ uint8_t TuringRegister::iterate(int8_t steps)
 
   if (resat)
   {
-    dbprintf("Resat to step %d\n", offset_);
     return 0;
   }
 

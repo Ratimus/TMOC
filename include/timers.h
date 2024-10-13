@@ -4,5 +4,6 @@
 
 uint8_t getFlashTimer();
 void setupTimers();
+std::function<bool()> one_shot(long long period);
 
 #endif

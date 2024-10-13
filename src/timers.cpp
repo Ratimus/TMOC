@@ -5,6 +5,7 @@
 // Volatile, 'cause we mess with these in ISRs
 volatile uint8_t flashTimer(0);
 volatile uint16_t millisTimer(0);
+volatile long long elapsed(0);
 
 hw_timer_t *timer1(nullptr);   // Timer library takes care of telling this where to point
 
@@ -25,9 +26,8 @@ void setupTimers()
 // SLOW: select slot for saving current pattern (get here with a long press)
 uint8_t getFlashTimer()
 {
-  uint8_t timerVal;
   cli();
-  timerVal = flashTimer;
+  uint8_t timerVal = flashTimer;
   sei();
   uint8_t retval(0);
   if ((timerVal / 4) % 2)
@@ -57,9 +57,29 @@ void ICACHE_RAM_ATTR onTimer1()
   writeHigh.service();
 
   ++millisTimer;
+  ++elapsed;
   if (millisTimer == 1000)
   {
     millisTimer = 0;
   }
   flashTimer = millisTimer / 10;
 }
+
+long long timestamp()
+{
+  cli();
+  long long ret(elapsed);
+  sei();
+  return ret;
+}
+
+std::function<bool()> one_shot(long long period)
+{
+    long long then = timestamp();
+
+    return [=]() mutable {
+        long long now = timestamp();
+        return (now - then) >= period;
+    };
+}
+
