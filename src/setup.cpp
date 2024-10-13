@@ -14,9 +14,7 @@ void setupESP32_ADCs()
 
 // Sequencer state variables
 uint8_t OctaveRange(1);
-uint8_t currentBank(0);
-
-int8_t patternPending(-1);
+int8_t patternPending(-1);    //
 
 bool set_bit_0(0);
 bool clear_bit_0(0);

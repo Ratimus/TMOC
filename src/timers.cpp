@@ -1,7 +1,6 @@
 #include "hwio.h"
 #include "setup.h"
 #include "timers.h"
-#include "CtrlPanel.h"
 
 // Volatile, 'cause we mess with these in ISRs
 volatile uint8_t flashTimer(0);

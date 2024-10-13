@@ -1,38 +1,73 @@
 #include "hwio.h"
-#include <CtrlPanel.h>
+#include <Arduino.h>
+#include <MCP_ADC.h>
+#include <RatFuncs.h>
+#include <MagicButton.h>
 
+
+////////////////////////////////////////////////////////////////
+//                      BUILT-IN IO
+////////////////////////////////////////////////////////////////
+// Use the onboard ADCs for external control voltage & the main control
+ESP32AnalogRead cvA;        // "CV" input
+ESP32AnalogRead cvB;        // "NOISE" input
+ESP32AnalogRead turing;     // "LOOP" variable resistor
+
+// Here's the ESP32 DAC output
+DacESP32 voltsExp(static_cast<gpio_num_t>(DAC1_CV_OUT));
+
+
+////////////////////////////////////////////////////////////////
+//                  DIGITAL HW CONTROLS
+////////////////////////////////////////////////////////////////
+// Bit 0 set/clear
+MagicButton writeHigh(TOGGLE_UP, 1, 1);
+MagicButton writeLow(TOGGLE_DOWN, 1, 1);
+
+
+////////////////////////////////////////////////////////////////
+//                      GATE INPUTS
+////////////////////////////////////////////////////////////////
+// Keep track of Clock and Reset digital inputs
+GateInArduino gates(NUM_GATES_IN, GATE_PIN, true);
+
+
+////////////////////////////////////////////////////////////////
+//               HARDWARE SHIFT REGISTER OUTPUTS
+////////////////////////////////////////////////////////////////
 // Hardware interfaces for 74HC595s
 OutputRegister<uint16_t>  leds(SR_CLK, SR_DATA, LED_SR_CS, regMap);
 OutputRegister<uint8_t>   triggers(SR_CLK, SR_DATA, TRIG_SR_CS, trgMap);
-
-MultiChannelDac output(NUM_DAC_CHANNELS);
 
 // Data values for 74HC595s
 uint8_t dacRegister(0);    // Blue LEDs + DAC8080
 uint8_t fdrRegister(0);    // Green Fader LEDs
 uint8_t trgRegister(0);    // Gate/Trigger outputs + yellow LEDs
 
-// Use the onboard ADCs for external control voltage & the main control
-ESP32AnalogRead cvA;        // "CV" input
-ESP32AnalogRead cvB;        // "NOISE" input
-ESP32AnalogRead turing;     // "LOOP" variable resistor
-
-// Bit 0 set/clear
-MagicButton writeHigh(TOGGLE_UP, 1, 1);
-MagicButton writeLow(TOGGLE_DOWN, 1, 1);
-
-// Here's the ESP32 DAC output
-DacESP32 voltsExp(static_cast<gpio_num_t>(DAC1_CV_OUT));
-
-// Keep track of Clock and Reset digital inputs
-GateInArduino gates(NUM_GATES_IN, GATE_PIN, true);
-
-
 // Note: you're still gonna need to clock this before it updates
-void setDacRegister(uint8_t val)  { dacRegister = val; leds.setReg(dacRegister, 1);  }
-void setTrigRegister(uint8_t val) { trgRegister = val; triggers.setReg(trgRegister); }
-void setFaderRegister(uint8_t val){ fdrRegister = val; leds.setReg(fdrRegister, 0);  }
+void setDacRegister(uint8_t val)
+{
+  dacRegister = val;
+  leds.setReg(dacRegister, 1);
+}
 
+void setTrigRegister(uint8_t val)
+{
+  trgRegister = val;
+  triggers.setReg(trgRegister);
+}
+
+void setFaderRegister(uint8_t val)
+{
+  fdrRegister = val;
+  leds.setReg(fdrRegister, 0);
+}
+
+
+////////////////////////////////////////////////////////////////
+//                      DAC OUTPUTS
+////////////////////////////////////////////////////////////////
+MultiChannelDac output(NUM_DAC_CHANNELS);
 
 // DAC 0: Faders & register
 // DAC 1: Faders & ~register
@@ -88,7 +123,32 @@ void expandVoltages(uint8_t shiftReg)
   voltsExp.outputVoltage(writeVal_8);
 }
 
-// void huh(uint8_t ch)
-// {
-//     output.setChannelNote(ch, noteVals[ch]);
-// }
+
+////////////////////////////////////////////////////////////////
+//                       FADERS
+////////////////////////////////////////////////////////////////
+MCP3208 adc0 = MCP3208(SPI_DATA_OUT, SPI_DATA_IN, SPI_CLK);
+
+MultiModeCtrl * faderBank[8];
+
+void initADC()
+{
+  adc0.begin(ADC0_CS); // Chip select pin.
+  for (auto ch(0); ch < 8; ++ch)
+  {
+    faderBank[ch] = new MultiModeCtrl(8, &adc0, sliderMap[ch], 12);
+  }
+  dbprintf("adc0 initialized, CS = pin %d\n", ADC0_CS);
+}
+
+
+// Sets upper and lower bounds for faders based on desired octave range
+void setRange(uint8_t octaves)
+{
+  for (auto fader(0); fader < NUM_FADERS; ++fader)
+  {
+    faderBank[fader]->setRange(octaves);
+  }
+  dbprintf("Range set to %u octaves\n", octaves);
+}
+

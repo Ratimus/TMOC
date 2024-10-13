@@ -49,6 +49,7 @@ const uint8_t GATE_PIN[NUM_GATES_IN]{CLOCK_IN, RESET_IN};
 
 const uint8_t NUM_DAC_CHANNELS(4);
 
-extern uint8_t currentBank;
+const int8_t LOW_NOTE(0);
+const int8_t HIGH_NOTE(12);
 
 const uint8_t NUM_BANKS             (8);

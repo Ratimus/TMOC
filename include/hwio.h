@@ -8,6 +8,7 @@
 #include <MagicButton.h>
 #include <DacESP32.h>
 #include <GateIn.h>
+#include <SharedCtrl.h>
 
 // Keep track of Clock and Reset digital inputs
 extern GateInArduino gates;
@@ -16,6 +17,7 @@ extern GateInArduino gates;
 extern OutputRegister<uint16_t> leds;
 extern OutputRegister<uint8_t> triggers;
 
+// Abstraction for our 12-bit DAC channels
 extern MultiChannelDac output;
 
 // Here's the ESP32 DAC output
@@ -35,7 +37,10 @@ extern ESP32AnalogRead cvA;        // "CV" input
 extern ESP32AnalogRead cvB;        // "NOISE" input
 extern ESP32AnalogRead turing;     // "LOOP" variable resistor
 
-// Note: you're still gonna need to clock this before it updates
+// Virtual overlays for slide potentiometers
+extern MultiModeCtrl * faderBank[];
+
+// Note: you're still gonna need to clock these before these update
 void setDacRegister(uint8_t val);
 void setTrigRegister(uint8_t val);
 void setFaderRegister(uint8_t val);
@@ -45,9 +50,9 @@ void setFaderRegister(uint8_t val);
 // DAC 2: abs(DAC 1 - DAC 0)
 // DAC 3: DAC 0 if reg & BIT0 else no change from last value
 void expandVoltages(uint8_t shiftReg);
-void huh(uint8_t ch);
 
-
+void initADC();
+void setRange(uint8_t octaves);
 // // TODO: decide what controls I want to use to activate this alternate mode
 // // Melodic algorithm inspired by Mystic Circuits' "Leaves" sequencer
 // void iThinkYouShouldLeaf(uint8_t shiftReg)

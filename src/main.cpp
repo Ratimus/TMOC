@@ -14,13 +14,11 @@
 // Ryan "Ratimus" Richardson
 // ------------------------------------------------------------------------
 
-
 #include <Arduino.h>
 #include <RatFuncs.h>
 #include <Wire.h>
 #include "hw_constants.h"
 #include "OutputDac.h"
-#include <CtrlPanel.h>
 #include <bitHelpers.h>
 #include "TuringRegister.h"
 #include <OutputRegister.h>
@@ -29,6 +27,9 @@
 #include "hwio.h"
 #include "setup.h"
 #include "leds.h"
+
+#define RESET_FLAG 1
+#define CLOCK_FLAG 0
 
 
 void handleMode(ModeCommand modeCmd);
@@ -39,10 +40,6 @@ void setup()
 {
   setThingsUp();
 }
-
-
-#define RESET_FLAG 1
-#define CLOCK_FLAG 0
 
 // Got an external clock pulse? Do the thing
 void onClock(int8_t stepAmount)
@@ -222,7 +219,6 @@ void loadPattern(uint8_t loadSlot)
     faderBank[fd]->selectActiveBank(loadSlot);
   }
   dacRegister = alan.getOutput();
-  currentBank = loadSlot;
   patternPending = -1;
 }
 

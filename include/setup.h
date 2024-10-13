@@ -6,7 +6,6 @@
 #include <GateIn.h>
 #include <RatFuncs.h>
 #include "OutputDac.h"
-#include <CtrlPanel.h>
 #include <bitHelpers.h>
 #include <ClickEncoder.h>
 #include "modeCtrl.h"
@@ -14,13 +13,10 @@
 #include <OutputRegister.h>
 #include "ESP32_New_TimerInterrupt.h"
 
-extern float ONE_OVER_ADC_MAX;
-
 extern ModeControl mode;
 
 // Sequencer state variables
 extern uint8_t OctaveRange;
-extern uint8_t currentBank;
 
 extern int8_t patternPending;
 
@@ -33,7 +29,6 @@ extern TuringRegister alan;
 // Hardware interfaces for 74HC595s
 extern OutputRegister<uint16_t>  leds;
 extern OutputRegister<uint8_t>   triggers;
-
 
 // Don't light up "locked" faders regardless of bit vals
 extern uint8_t faderLockStateReg;
