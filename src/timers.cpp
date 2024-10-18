@@ -1,6 +1,9 @@
 #include "hwio.h"
 #include "setup.h"
 #include "timers.h"
+#include <vector>
+#include <forward_list>
+
 
 // Volatile, 'cause we mess with these in ISRs
 volatile uint8_t flashTimer(0);
@@ -8,6 +11,33 @@ volatile uint16_t millisTimer(0);
 volatile long long elapsed(0);
 
 hw_timer_t *timer1(nullptr);   // Timer library takes care of telling this where to point
+
+struct timed_callback
+{
+  explicit timed_callback(unsigned long long time, std::function<void()>*cb):
+    counter(time),
+    func(cb)
+  { ; }
+
+  unsigned long long counter;
+  std::function<void()>*func;
+
+  bool operator -- () { return tick(); }
+  bool tick()
+  {
+    if (counter)
+    {
+      --counter;
+    }
+
+    return !counter;
+  }
+
+  bool operator == (timed_callback comp) { return this == &comp; }
+};
+
+std::forward_list<timed_callback> callbacks;
+std::vector<std::function<void()>*> runlist;
 
 void ICACHE_RAM_ATTR onTimer1();
 
@@ -63,6 +93,17 @@ void ICACHE_RAM_ATTR onTimer1()
     millisTimer = 0;
   }
   flashTimer = millisTimer / 10;
+
+  auto iter = callbacks.begin();
+  while (iter != callbacks.cend())
+  {
+    if (!iter->tick())
+    {
+      runlist.push_back(iter->func);
+      callbacks.remove(*iter);
+      ++iter;
+    }
+  }
 }
 
 long long timestamp()
@@ -73,13 +114,39 @@ long long timestamp()
   return ret;
 }
 
-std::function<bool()> one_shot(long long period)
+/*
+for counter, func in callbacks.items()
+  --counter;
+  if !counter
+    callbacks.pop(func)
+*/
+
+std::function<bool()> one_shot(
+  long long period,
+  std::function<void()>*func)
 {
     long long then = timestamp();
+    bool expired(false);
+
+    if (func)
+    {
+      callbacks.push_front(timed_callback(period, func));
+    }
 
     return [=]() mutable {
         long long now = timestamp();
         return (now - then) >= period;
     };
 }
+
+void serviceRunList()
+{
+  while (!runlist.empty())
+  {
+    std::function<void()>func = *runlist.back();
+    func();
+    runlist.pop_back();
+  }
+}
+
 

@@ -9,6 +9,7 @@
 #include <DacESP32.h>
 #include <GateIn.h>
 #include <SharedCtrl.h>
+#include "leds.h"
 
 // Keep track of Clock and Reset digital inputs
 extern GateInArduino gates;
@@ -23,9 +24,7 @@ extern MultiChannelDac output;
 // Here's the ESP32 DAC output
 extern DacESP32 voltsExp;
 
-// Data values for 74HC595s
-extern uint8_t dacRegister;    // Blue LEDs + DAC8080
-extern uint8_t fdrRegister;    // Green Fader LEDs
+// Data values for 74HC595
 extern uint8_t trgRegister;    // Gate/Trigger outputs + yellow LEDs
 
 // Bit 0 set/clear
@@ -40,10 +39,12 @@ extern ESP32AnalogRead turing;     // "LOOP" variable resistor
 // Virtual overlays for slide potentiometers
 extern MultiModeCtrl * faderBank[];
 
+// Control object for all our leds
+extern LedController panelLeds;
+
 // Note: you're still gonna need to clock these before these update
-void setDacRegister(uint8_t val);
-void setTrigRegister(uint8_t val);
-void setFaderRegister(uint8_t val);
+void setTriggerRegister(uint8_t val);
+void checkTriggersExpired();
 
 // DAC 0: Faders & register
 // DAC 1: Faders & ~register
@@ -53,6 +54,8 @@ void expandVoltages(uint8_t shiftReg);
 
 void initADC();
 void setRange(uint8_t octaves);
+
+
 // // TODO: decide what controls I want to use to activate this alternate mode
 // // Melodic algorithm inspired by Mystic Circuits' "Leaves" sequencer
 // void iThinkYouShouldLeaf(uint8_t shiftReg)

@@ -3,6 +3,7 @@
 #include <MCP_ADC.h>
 #include <RatFuncs.h>
 #include <MagicButton.h>
+#include "timers.h"
 
 
 ////////////////////////////////////////////////////////////////
@@ -31,30 +32,31 @@ OutputRegister<uint16_t>  leds(SR_CLK, SR_DATA, LED_SR_CS, regMap);
 OutputRegister<uint8_t>   triggers(SR_CLK, SR_DATA, TRIG_SR_CS, trgMap);
 
 // Data values for 74HC595s
-uint8_t dacRegister(0);    // Blue LEDs + DAC8080
-uint8_t fdrRegister(0);    // Green Fader LEDs
-uint8_t trgRegister(0);    // Gate/Trigger outputs + yellow LEDs
+uint8_t trgRegister(0);     // Gate/Trigger outputs + yellow LEDs
+
+auto triggerTimer(one_shot(0));
 
 // Note: you're still gonna need to clock this before it updates
-void setDacRegister(uint8_t val)
-{
-  dacRegister = val;
-  leds.setReg(dacRegister, 1);
-}
-
-void setTrigRegister(uint8_t val)
+void setTriggerRegister(uint8_t val)
 {
   trgRegister = val;
   triggers.setReg(trgRegister);
 }
 
-void setFaderRegister(uint8_t val)
+void handleTriggers()
 {
-  fdrRegister = val;
-  leds.setReg(fdrRegister, 0);
+  setTriggerRegister(alan.pulseIt());
+  triggerTimer = one_shot(10);
+  triggers.clock();
 }
 
-
+void checkTriggersExpired()
+{
+  if (triggerTimer())
+  {
+    triggers.allOff();
+  }
+}
 ////////////////////////////////////////////////////////////////
 //                      DAC OUTPUTS
 ////////////////////////////////////////////////////////////////
@@ -121,6 +123,8 @@ void expandVoltages(uint8_t shiftReg)
 MCP3208 adc0 = MCP3208(SPI_DATA_OUT, SPI_DATA_IN, SPI_CLK);
 
 MultiModeCtrl * faderBank[8];
+
+LedController panelLeds;
 
 void initADC()
 {

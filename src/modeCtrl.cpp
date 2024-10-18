@@ -6,6 +6,12 @@ mode_type ModeControl::currentMode()
   return currentMode_;
 }
 
+
+bool ModeControl::performing()
+{
+  return currentMode_ == mode_type::PERFORMANCE_MODE;
+}
+
 int8_t ModeControl::activeSlot()
 {
   switch (currentMode_)

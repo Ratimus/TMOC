@@ -20,19 +20,12 @@ extern uint8_t OctaveRange;
 
 extern int8_t patternPending;
 
-extern bool set_bit_0;
-extern bool clear_bit_0;
-
 // Core Shift Register functionality
 extern TuringRegister alan;
 
 // Hardware interfaces for 74HC595s
 extern OutputRegister<uint16_t>  leds;
 extern OutputRegister<uint8_t>   triggers;
-
-// Don't light up "locked" faders regardless of bit vals
-extern uint8_t faderLockStateReg;
-extern bool    faderLocksChanged;
 
 void setThingsUp();
 

@@ -33,7 +33,7 @@ toggle_cmd updateToggle()
 
   if (clickies[1] == ButtonState :: Clicked || clickies[1] == ButtonState :: Held)
   {
-    if (mode.currentMode() == mode_type :: PERFORMANCE_MODE)
+    if (mode.performing())
     {
       return toggle_cmd::SET_BIT;
     }

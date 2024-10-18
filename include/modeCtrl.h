@@ -95,6 +95,7 @@ public:
   int8_t activeSlot();
   ModeCommand update();
   mode_type currentMode();
+  bool performing();
 };
 
 

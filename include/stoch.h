@@ -12,6 +12,9 @@ struct Stochasticizer
     ESP32AnalogRead& extLoop,
     ESP32AnalogRead& extCv);
 
+  mutable bool bitSetPending_;
+  mutable bool bitClearPending_;
+
   bool stochasticize(const bool startVal) const;
 };
 

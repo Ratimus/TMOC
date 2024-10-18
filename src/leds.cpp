@@ -1,26 +1,44 @@
 #include "leds.h"
 #include "timers.h"
+#include "hwio.h"
 
 // Updates main horizontal LED array to display current pattern (in
 // performance mode) or status (in one of the editing modes)
 
-void updateFaderLeds()
+LedController::LedController():
+  faderLockStateReg(0xFF),
+  resetBlankTime(100)
+{
+  enableLeds = one_shot(0);
+}
+
+
+void LedController::setOneShot()
+{
+  enableLeds = one_shot(resetBlankTime);
+}
+
+
+void LedController::updateFaderLeds()
 {
   // Check whether each individual fader is unlocked; don't light them up unless they are
   for (auto fd(0); fd < NUM_FADERS; ++fd)
   {
-    bitWrite(faderLockStateReg, fd, faderBank[fd]->getLockState() == LockState::STATE_UNLOCKED);
+    faderBank[fd]->read();
+    bitWrite(faderLockStateReg,
+             fd,
+             faderBank[fd]->getLockState() == LockState::STATE_UNLOCKED);
   }
-  leds.setReg(dacRegister & faderLockStateReg, 0);
+  leds.setReg(alan.getOutput() & faderLockStateReg, 0);
 }
 
 
-void updateMainLeds()
+void LedController::updateMainLeds()
 {
-  if (mode.currentMode() == mode_type::PERFORMANCE_MODE)
+  if (mode.performing())
   {
     // Display the current register/pattern value
-    leds.setReg(dacRegister, 1);
+    leds.setReg(alan.getOutput(), 1);
     return;
   }
 
@@ -90,15 +108,16 @@ void updateMainLeds()
   }
 }
 
-void updateRegLeds(bool en)
+void LedController::updateAll()
 {
-  if (!en)
+  if (!enableLeds())
   {
     leds.setReg(0, 0);
     leds.setReg(0,1);
     leds.clock();
     return;
   }
+
   updateFaderLeds();
   updateMainLeds();
   if (!leds.pending())
