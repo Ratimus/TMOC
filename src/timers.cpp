@@ -56,9 +56,6 @@ struct timed_callback
 std::forward_list<timed_callback> active_timers;
 std::deque<timed_callback> expired_timers;
 
-// Condition for forward_list<timed_callback>::remove_if
-bool is_shot(const timed_callback& node) { return node.expired; }
-
 void ICACHE_RAM_ATTR onTimer1();
 
 void setupTimers()
@@ -124,7 +121,9 @@ void ICACHE_RAM_ATTR onTimer1()
       expired_timers.push_back(timer);
     }
   }
-  active_timers.remove_if(is_shot);
+
+  // Condition for forward_list<timed_callback>::remove_if
+  active_timers.remove_if([] (const timed_callback& node) { return node.expired; });
 
   // Run List can't run until it gets this
   xSemaphoreGiveFromISR(xSemaphore, &xHigherPriorityTaskWoken);
@@ -178,5 +177,3 @@ void serviceRunList()
     expired_timers.pop_front();
   }
 }
-
-

@@ -14,18 +14,11 @@
 // Keep track of Clock and Reset digital inputs
 extern GateInArduino gates;
 
-// Hardware interfaces for 74HC595s
-extern OutputRegister<uint16_t> leds;
-extern OutputRegister<uint8_t> triggers;
-
 // Abstraction for our 12-bit DAC channels
 extern MultiChannelDac output;
 
 // Here's the ESP32 DAC output
 extern DacESP32 voltsExp;
-
-// Data values for 74HC595
-extern uint8_t trgRegister;    // Gate/Trigger outputs + yellow LEDs
 
 // Bit 0 set/clear
 extern MagicButton writeHigh;
@@ -42,9 +35,20 @@ extern MultiModeCtrl * faderBank[];
 // Control object for all our leds
 extern LedController panelLeds;
 
-// Note: you're still gonna need to clock these before these update
-void setTriggerRegister(uint8_t val);
+class Triggers
+{
+  uint8_t regVal;    // Gate/Trigger outputs + yellow LEDs
+  OutputRegister<uint8_t> hw_reg;
 
+public:
+  Triggers();
+  // Note: you're still gonna need to clock these before these update
+  void setReg(uint8_t val);
+  void clock();
+  void reset();
+};
+
+extern Triggers triggers;
 // DAC 0: Faders & register
 // DAC 1: Faders & ~register
 // DAC 2: abs(DAC 1 - DAC 0)

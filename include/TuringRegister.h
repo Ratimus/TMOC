@@ -31,7 +31,7 @@ public:
   uint16_t norm(uint16_t reg, uint8_t len) const;
 
   // Shifts register
-  void iterate(int8_t steps);
+  void iterate(int8_t steps, bool inPlace = false);
 
   // Rotates the working register back to step 0
   void returnToZero();
@@ -63,8 +63,8 @@ public:
 
   uint8_t getDrunkenIndex();
 protected:
-  void handleNewPattern(int8_t nextStep);
   void loadPattern();
+  void loadNewFaderBank();
 
   Stochasticizer        stoch_;
 

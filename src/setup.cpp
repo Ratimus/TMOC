@@ -51,8 +51,7 @@ void setThingsUp()
   setupESP32_ADCs();
 
   // Clear trigger output register
-  setTriggerRegister(0);
-  triggers.clock();
+  triggers.reset();
 
   // Set up external 8 channel ADC
   initADC();

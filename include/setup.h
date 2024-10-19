@@ -23,10 +23,6 @@ extern int8_t patternPending;
 // Core Shift Register functionality
 extern TuringRegister alan;
 
-// Hardware interfaces for 74HC595s
-extern OutputRegister<uint16_t>  leds;
-extern OutputRegister<uint8_t>   triggers;
-
 void setThingsUp();
 
 #endif

@@ -27,29 +27,34 @@ GateInArduino gates(NUM_GATES_IN, GATE_PIN, true);
 ////////////////////////////////////////////////////////////////
 //               HARDWARE SHIFT REGISTER OUTPUTS
 ////////////////////////////////////////////////////////////////
-// Hardware interfaces for 74HC595s
-OutputRegister<uint16_t>  leds(SR_CLK, SR_DATA, LED_SR_CS, regMap);
-OutputRegister<uint8_t>   triggers(SR_CLK, SR_DATA, TRIG_SR_CS, trgMap);
+Triggers triggers;
 
-// Data values for 74HC595s
-uint8_t trgRegister(0);     // Gate/Trigger outputs + yellow LEDs
+void Triggers::reset()
+{
+  hw_reg.reset();
+}
+
+Triggers::Triggers():
+  hw_reg(OutputRegister<uint8_t> (SR_CLK, SR_DATA, TRIG_SR_CS, trgMap))
+{
+  ;
+}
 
 // Note: you're still gonna need to clock this before it updates
-void setTriggerRegister(uint8_t val)
+void Triggers::setReg(uint8_t val)
 {
-  trgRegister = val;
-  triggers.setReg(trgRegister);
+  regVal = val;
+  hw_reg.setReg(regVal);
 }
 
 
-void handleTriggers()
+void Triggers::clock()
 {
-  setTriggerRegister(alan.pulseIt());
-  triggers.clock();
+  setReg(alan.pulseIt());
+  hw_reg.clock();
   // Turn the triggers off in {TODO: MAAGIC NUMBER} 10 ms
-  one_shot(10, [](){ setTriggerRegister(0); triggers.clock();});
+  one_shot(10, [this](){ setReg(0); hw_reg.clock();});
 }
-
 
 ////////////////////////////////////////////////////////////////
 //                      DAC OUTPUTS

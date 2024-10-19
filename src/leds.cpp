@@ -7,11 +7,12 @@
 // performance mode) or status (in one of the editing modes)
 
 LedController::LedController():
+  hw_reg(OutputRegister<uint16_t>  (SR_CLK, SR_DATA, LED_SR_CS, regMap)),
   faderLockStateReg(0xFF),
   resetBlankTime(100),
   enabled(true)
 {;}
-
+// Hardware interfaces for 74HC595s
 
 void LedController::blinkOut()
 {
@@ -30,7 +31,7 @@ void LedController::updateFaderLeds()
              fd,
              faderBank[fd]->getLockState() == LockState::STATE_UNLOCKED);
   }
-  leds.setReg(alan.getOutput() & faderLockStateReg, 0);
+  hw_reg.setReg(alan.getOutput() & faderLockStateReg, 0);
 }
 
 
@@ -39,7 +40,7 @@ void LedController::updateMainLeds()
   if (mode.performing())
   {
     // Display the current register/pattern value
-    leds.setReg(alan.getOutput(), 1);
+    hw_reg.setReg(alan.getOutput(), 1);
     return;
   }
 
@@ -50,11 +51,11 @@ void LedController::updateMainLeds()
     uint8_t len(alan.getLength());
     if (len <= 8)
     {
-      leds.setReg(0x01 << (len - 1), 1);
+      hw_reg.setReg(0x01 << (len - 1), 1);
     }
     else
     {
-      leds.setReg(~(0x01 << (len - 9)), 1);
+      hw_reg.setReg(~(0x01 << (len - 9)), 1);
     }
     return;
   }
@@ -76,11 +77,11 @@ void LedController::updateMainLeds()
     if (flashTimer & BIT0)
     {
       uint8_t tmp(0x01 << (uint8_t)slot);
-      leds.setReg(tmp, 1);
+      hw_reg.setReg(tmp, 1);
     }
     else
     {
-      leds.setReg(0, 1);
+      hw_reg.setReg(0, 1);
     }
     return;
   }
@@ -99,11 +100,11 @@ void LedController::updateMainLeds()
     if (flashTimer & BIT1)
     {
       uint8_t tmp(0x01 << (uint8_t)slot);
-      leds.setReg(tmp, 1);
+      hw_reg.setReg(tmp, 1);
     }
     else
     {
-      leds.setReg(0, 1);
+      hw_reg.setReg(0, 1);
     }
     return;
   }
@@ -113,17 +114,17 @@ void LedController::updateAll()
 {
   if (!enabled)
   {
-    leds.setReg(0, 0);
-    leds.setReg(0,1);
-    leds.clock();
+    hw_reg.setReg(0, 0);
+    hw_reg.setReg(0,1);
+    hw_reg.clock();
     return;
   }
 
   updateFaderLeds();
   updateMainLeds();
-  if (!leds.pending())
+  if (!hw_reg.pending())
   {
     return;
   }
-  leds.clock();
+  hw_reg.clock();
 }

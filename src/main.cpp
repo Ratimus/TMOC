@@ -39,11 +39,6 @@ void setup()
   setThingsUp();
 }
 
-void savePattern(uint8_t saveSlot);
-void loadNewFaderBank();
-void onClock(int8_t stepAmount);
-void handleOutputs();
-void handleTriggers();
 
 void handleMode()
 {
@@ -61,11 +56,11 @@ void handleMode()
     case command_enum::STEP:
       if (cmd.val < 0)
       {
-        alan.iterate(-1);
+        alan.iterate(-1, true);
       }
       else
       {
-        alan.iterate(1);
+        alan.iterate(1, true);
       }
       // This only happens in mode_type::PERFORMANCE_MODE, so no need to check
       panelLeds.updateAll();
@@ -76,7 +71,7 @@ void handleMode()
       break;
 
     case command_enum::SAVE:
-      savePattern(cmd.val);
+      alan.savePattern(cmd.val);
       break;
 
     case command_enum::LENGTH:
@@ -167,46 +162,32 @@ void handleReset()
   #endif
 }
 
+
 void handleClock()
 {
   #ifdef DEBUG_CLOCK
   if (floating_debug_flag == toggle_cmd::CLEAR_BIT)
   {
-    dbprintf("!KCOLC\n");
-    onClock(-1);
+      // Iterate the sequencer to the next state
+    alan.iterate(-1);
     floating_debug_flag = toggle_cmd::NO;
   }
 
   if (floating_debug_flag == toggle_cmd::SET_BIT)
   {
-    dbprintf("CLOCK!\n");
-    onClock(1);
+    alan.iterate(1);
     floating_debug_flag = toggle_cmd::NO;
   }
   #else
   if (gates.readRiseFlag(CLOCK_FLAG))
   {
-    dbprintf("CLOCK!\n");
-    // Single clicks on the toggle will set/clear the next bit, but we also want to
-    // be able to hold it down and write or clear the entire register
-    onClock((cvB.readRaw() > 2047) ? -1 : 1, resetCleared);
+    alan.iterate((cvB.readRaw() > 2047) ? -1 : 1);
   }
   else if (gates.readFallFlag(CLOCK_FLAG))
   {
     triggers.allOff();
   }
   #endif
-}
-
-void handleOutputs()
-{
-  // Update all the various outputs
-  expandVoltages(alan.getOutput());
-}
-
-void handleLeds()
-{
-  panelLeds.updateAll();
 }
 
 
@@ -219,54 +200,6 @@ void loop()
   handleToggle();
   handleReset();
   handleClock();
-  handleLeds();
+  panelLeds.updateAll();
   serviceRunList();
 }
-
-
-// Got an external clock pulse? Do the thing
-void onClock(int8_t stepAmount)
-{
-  // Iterate the sequencer to the next state
-  alan.iterate(stepAmount);
-
-  if (alan.wasReset())
-  {
-    // Only do this when you get a clock after a reset
-    panelLeds.blinkOut();
-  }
-
-  if (alan.newPattern())
-  {
-    loadNewFaderBank();
-  }
-
-  handleOutputs();
-  handleTriggers();
-}
-
-
-// Saves the pattern register, pattern length, and current fader locations to the selected slot
-void savePattern(uint8_t saveSlot)
-{
-  dbprintf("copying into %u\n", saveSlot);
-  for (uint8_t fd = 0; fd < NUM_FADERS; ++fd)
-  {
-    faderBank[fd]->saveActiveCtrl(saveSlot);
-  }
-  alan.savePattern(saveSlot);
-}
-
-
-// Loads the pattern register, pattern length, and saved fader locations from the selected bank
-void loadNewFaderBank()
-{
-  uint8_t loadSlot = alan.getSlot();
-
-  dbprintf("loading bank %u\n", loadSlot);
-  for (uint8_t fd = 0; fd < NUM_FADERS; ++fd)
-  {
-    faderBank[fd]->selectActiveBank(loadSlot);
-  }
-}
-

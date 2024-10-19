@@ -9,6 +9,8 @@
 #include "RatFuncs.h"
 #include "TuringRegister.h"
 #include <Preferences.h>
+#include "hwio.h"
+
 
 Preferences prefs;
 
@@ -77,16 +79,16 @@ uint16_t TuringRegister::norm(uint16_t reg, uint8_t len) const
 }
 
 
-void TuringRegister::iterate(int8_t steps)
+void TuringRegister::iterate(int8_t steps, bool inPlace /*=false*/)
 {
   int8_t next(0);
 
   // Shift LEFT on positive steps; RIGHT on negative steps
-  uint8_t leftAmt;
-  uint8_t rightAmt;
+  uint8_t leftAmt(0);
+  uint8_t rightAmt(0);
 
-  int8_t  readIdx;
-  uint8_t writeIdx;
+  int8_t  readIdx(0);
+  uint8_t writeIdx(0);
 
   // Handle pending reset (if applicable)
   if (resetPending_)
@@ -124,10 +126,18 @@ void TuringRegister::iterate(int8_t steps)
 
   next %= *pPatternLength;
 
-  handleNewPattern(next);
+  // Load new patterns on the downbeat
+  if (newLoadPending_ && next == 0)
+  {
+    loadPattern();
+    offset_   = 0;
+    wasReset_ = true;
+  }
+
   if (!wasReset_)
   {
     // Update register
+    newPatternLoaded_ = false;
     bool writeVal(bitRead(workingRegister, readIdx));
     workingRegister = (workingRegister << leftAmt) | \
                       (workingRegister >> rightAmt);
@@ -138,24 +148,27 @@ void TuringRegister::iterate(int8_t steps)
 
   offset_ = next;
 
-  dbprintf("Step %d\n", offset_);
+  if (newPatternLoaded_)
+  {
+    loadNewFaderBank();
+  }
+
+  if (inPlace)
+  {
+    return;
+  }
+
+  // Update all the various outputs
+  expandVoltages(getOutput());
+  triggers.clock();
+
+  if (wasReset_)
+  {
+    // Only do this when you get a clock after a reset
+    panelLeds.blinkOut();
+  }
 }
 
-
-void TuringRegister::handleNewPattern(int8_t nextStep)
-{
-  // Load new patterns on the downbeat
-  if (newLoadPending_ && nextStep == 0)
-  {
-    loadPattern();
-    offset_   = 0;
-    wasReset_ = true;
-  }
-  else
-  {
-    newPatternLoaded_ = false;
-  }
-}
 
 // Selects a new pattern to load on the downbeat. If you select the current
 // slot, it will reload it, effectively undoing any changes
@@ -256,6 +269,17 @@ void TuringRegister::loadPattern()
 }
 
 
+// Loads the pattern register, pattern length, and saved fader locations from the selected bank
+void TuringRegister::loadNewFaderBank()
+{
+  dbprintf("loading bank %u\n", currentBankIdx_);
+  for (uint8_t fd = 0; fd < NUM_FADERS; ++fd)
+  {
+    faderBank[fd]->selectActiveBank(currentBankIdx_);
+  }
+}
+
+
 void TuringRegister::savePattern(uint8_t bankIdx)
 {
   // Rotate working register to step 0
@@ -271,7 +295,12 @@ void TuringRegister::savePattern(uint8_t bankIdx)
   workingRegister = workingRegCopy;
 
   dbprintf("saved to slot %u\n", bankIdx);
-  printBits(lengthsBank[bankIdx]);
+
+  // Saves the pattern register, pattern length, and current fader locations to the selected slot
+  for (uint8_t fd = 0; fd < NUM_FADERS; ++fd)
+  {
+    faderBank[fd]->saveActiveCtrl(bankIdx);
+  }
 }
 
 // Make the trigger outputs do something interesting. Ideally, they'll all be related to

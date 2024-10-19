@@ -14,6 +14,8 @@ class LedController
   long long resetBlankTime;
   // Don't light up "locked" faders regardless of bit vals
   uint8_t faderLockStateReg;
+  // Hardware interfaces for 74HC595
+  OutputRegister<uint16_t>  hw_reg;
 
 public:
   bool enabled;
