@@ -44,7 +44,6 @@ extern LedController panelLeds;
 
 // Note: you're still gonna need to clock these before these update
 void setTriggerRegister(uint8_t val);
-void checkTriggersExpired();
 
 // DAC 0: Faders & register
 // DAC 1: Faders & ~register

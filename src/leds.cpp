@@ -1,21 +1,22 @@
 #include "leds.h"
 #include "timers.h"
 #include "hwio.h"
+#include <RatFuncs.h>
 
 // Updates main horizontal LED array to display current pattern (in
 // performance mode) or status (in one of the editing modes)
 
 LedController::LedController():
   faderLockStateReg(0xFF),
-  resetBlankTime(100)
-{
-  enableLeds = one_shot(0);
-}
+  resetBlankTime(100),
+  enabled(true)
+{;}
 
 
-void LedController::setOneShot()
+void LedController::blinkOut()
 {
-  enableLeds = one_shot(resetBlankTime);
+  enabled = false;
+  one_shot(resetBlankTime, [this](){enabled = true;});
 }
 
 
@@ -110,7 +111,7 @@ void LedController::updateMainLeds()
 
 void LedController::updateAll()
 {
-  if (!enableLeds())
+  if (!enabled)
   {
     leds.setReg(0, 0);
     leds.setReg(0,1);

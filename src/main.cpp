@@ -220,7 +220,7 @@ void loop()
   handleReset();
   handleClock();
   handleLeds();
-  checkTriggersExpired();
+  serviceRunList();
 }
 
 
@@ -233,7 +233,7 @@ void onClock(int8_t stepAmount)
   if (alan.wasReset())
   {
     // Only do this when you get a clock after a reset
-    panelLeds.setOneShot();
+    panelLeds.blinkOut();
   }
 
   if (alan.newPattern())
@@ -243,7 +243,6 @@ void onClock(int8_t stepAmount)
 
   handleOutputs();
   handleTriggers();
-  serviceRunList();
 }
 
 

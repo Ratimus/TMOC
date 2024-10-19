@@ -34,8 +34,6 @@ OutputRegister<uint8_t>   triggers(SR_CLK, SR_DATA, TRIG_SR_CS, trgMap);
 // Data values for 74HC595s
 uint8_t trgRegister(0);     // Gate/Trigger outputs + yellow LEDs
 
-auto triggerTimer(one_shot(0));
-
 // Note: you're still gonna need to clock this before it updates
 void setTriggerRegister(uint8_t val)
 {
@@ -43,20 +41,16 @@ void setTriggerRegister(uint8_t val)
   triggers.setReg(trgRegister);
 }
 
+
 void handleTriggers()
 {
   setTriggerRegister(alan.pulseIt());
-  triggerTimer = one_shot(10);
   triggers.clock();
+  // Turn the triggers off in {TODO: MAAGIC NUMBER} 10 ms
+  one_shot(10, [](){ setTriggerRegister(0); triggers.clock();});
 }
 
-void checkTriggersExpired()
-{
-  if (triggerTimer())
-  {
-    triggers.allOff();
-  }
-}
+
 ////////////////////////////////////////////////////////////////
 //                      DAC OUTPUTS
 ////////////////////////////////////////////////////////////////
