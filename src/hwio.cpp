@@ -143,3 +143,17 @@ void setRange(uint8_t octaves)
   }
 }
 
+void serviceIO()
+{
+  // Handle all our hardware inputs
+  for (uint8_t fd = 0; fd < 8; ++fd)
+  {
+    faderBank[fd]->service();
+  }
+
+  mode.service();
+  gates.service();
+  writeLow.service();
+  writeHigh.service();
+}
+

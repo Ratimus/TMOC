@@ -2,8 +2,6 @@
 
 #include <Arduino.h>
 
-const uint16_t uS_TO_mS(1000);
-const uint16_t ONE_KHZ_MICROS(uS_TO_mS); // 1000 uS for 1khz timer cycle for encoder
 
 // NOTE: GPIO34 doesn't have a pullup; I had to add a HW one
 const uint8_t LED_SR_CS         (2);

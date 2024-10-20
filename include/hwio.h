@@ -56,7 +56,7 @@ void expandVoltages(uint8_t shiftReg);
 void initADC();
 void setRange(uint8_t octaves);
 
-
+void serviceIO();
 // // TODO: decide what controls I want to use to activate this alternate mode
 // // Melodic algorithm inspired by Mystic Circuits' "Leaves" sequencer
 // void iThinkYouShouldLeaf(uint8_t shiftReg)

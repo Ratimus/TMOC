@@ -23,8 +23,6 @@ extern int8_t patternPending;
 // Core Shift Register functionality
 extern TuringRegister alan;
 
-extern SemaphoreHandle_t callbacks_sem;
-
 void setThingsUp();
 
 #endif

@@ -3,8 +3,7 @@
 #include <Arduino.h>
 
 void setupTimers();
-void serviceRunList();
-
+long long timestamp();
 uint8_t getFlashTimer();
 
 std::function<bool()> one_shot(

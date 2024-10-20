@@ -1,12 +1,12 @@
-#include "hwio.h"
-#include "setup.h"
 #include "timers.h"
 #include <vector>
 #include <RatFuncs.h>
 #include <deque>
 #include <forward_list>
+#include "hwio.h"
 
-BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+const uint16_t uS_TO_mS(1000);
+const uint16_t ONE_KHZ_MICROS(uS_TO_mS); // 1000 uS for 1khz timer cycle for encoder
 
 // Volatile, 'cause we mess with these in ISRs
 volatile uint8_t flashTimer(0);
@@ -14,6 +14,25 @@ volatile uint16_t millisTimer(0);
 volatile long long elapsed(0);
 
 hw_timer_t *timer1(nullptr);   // Timer library takes care of telling this where to point
+
+void ICACHE_RAM_ATTR onTimer1();
+void serviceRunList();
+
+BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+SemaphoreHandle_t callbacks_sem;
+TaskHandle_t callbacksTaskHandle(NULL);
+
+
+void IRAM_ATTR callbacksTask(void *param)
+{
+  callbacks_sem = xSemaphoreCreateBinary();
+
+  while (1)
+  {
+    xSemaphoreTake(callbacks_sem, portMAX_DELAY);
+    serviceRunList();
+  }
+}
 
 
 // Holds a time variable and a callback to fire when timer expires
@@ -54,15 +73,23 @@ struct timed_callback
 std::forward_list<timed_callback> active_timers;
 std::forward_list<timed_callback> expired_timers;
 
-void ICACHE_RAM_ATTR onTimer1();
-
 void setupTimers()
 {
-    // Set up master clock
-    timer1 = timerBegin(1, 80, true);
-    timerAttachInterrupt(timer1, &onTimer1, true);
-    timerAlarmWrite(timer1, ONE_KHZ_MICROS, true);
-    timerAlarmEnable(timer1);
+  // Set up master clock
+  timer1 = timerBegin(1, 80, true);
+  timerAttachInterrupt(timer1, &onTimer1, true);
+  timerAlarmWrite(timer1, ONE_KHZ_MICROS, true);
+  timerAlarmEnable(timer1);
+
+  xTaskCreate
+  (
+    callbacksTask,
+    "serviceRunList Task",
+    4096,
+    NULL,
+    10,
+    &callbacksTaskHandle
+  );
 }
 
 // This blinks LEDs on and off with different timings to indicate which mode you're in
@@ -91,16 +118,7 @@ uint8_t getFlashTimer()
 // ISR for Timer 1
 void ICACHE_RAM_ATTR onTimer1()
 {
-  // Handle all our hardware inputs
-  for (uint8_t fd = 0; fd < 8; ++fd)
-  {
-    faderBank[fd]->service();
-  }
-
-  mode.service();
-  gates.service();
-  writeLow.service();
-  writeHigh.service();
+  serviceIO();
 
   // Handle our "blinky" timer (which indicates the current mode)
   ++millisTimer;
@@ -169,7 +187,7 @@ void serviceRunList()
       return;
     }
 
-    // Timers are added with push_front - reverse the list so it's FIFO
+    // timed_callbacks are added with push_front - reverse the list so it's FIFO
     expired_timers.reverse();
     for (auto timer: expired_timers)
     {

@@ -24,33 +24,9 @@
 #define RESET_FLAG 1
 #define CLOCK_FLAG 0
 
-SemaphoreHandle_t callbacks_sem;
-TaskHandle_t callbacksTaskHandle(NULL);
-void IRAM_ATTR callbacksTask(void *param)
-{
-  callbacks_sem = xSemaphoreCreateBinary();
-
-  while (1)
-  {
-    xSemaphoreTake(callbacks_sem, portMAX_DELAY);
-    serviceRunList();
-  }
-}
-
-
 void setup()
 {
   setThingsUp();
-
-  xTaskCreate
-  (
-    callbacksTask,
-    "serviceRunList Task",
-    4096,
-    NULL,
-    10,
-    &callbacksTaskHandle
-  );
 }
 
 
@@ -142,8 +118,7 @@ toggle_cmd floating_debug_flag(toggle_cmd::NO);
 
 void handleReset()
 {
-
-  #ifdef DEBUG_CLOCK
+#ifdef DEBUG_CLOCK
   floating_debug_flag = updateToggle();
   if (floating_debug_flag == toggle_cmd::LESS_OCTAVES)
   {
@@ -151,23 +126,22 @@ void handleReset()
     floating_debug_flag = toggle_cmd::NO;
     return;
   }
-  #else
+#else
   if (!gates.readRiseFlag(RESET_FLAG))
   {
     return;
   }
 
   alan.reset();
-  #endif
+#endif
 }
 
 
 void handleClock()
 {
-  #ifdef DEBUG_CLOCK
+#ifdef DEBUG_CLOCK
   if (floating_debug_flag == toggle_cmd::CLEAR_BIT)
   {
-      // Iterate the sequencer to the next state
     alan.iterate(-1);
     floating_debug_flag = toggle_cmd::NO;
   }
@@ -177,7 +151,7 @@ void handleClock()
     alan.iterate(1);
     floating_debug_flag = toggle_cmd::NO;
   }
-  #else
+#else
   if (gates.readRiseFlag(CLOCK_FLAG))
   {
     alan.iterate((cvB.readRaw() > 2047) ? -1 : 1);
@@ -186,12 +160,9 @@ void handleClock()
   {
     triggers.allOff();
   }
-  #endif
+#endif
 }
 
-
-// TODO: I updated my MagicButton class a while ago to only register a 'Held' state after you
-// release, so I need to bring that back as an option if I want it to function that way
 
 void loop()
 {
@@ -200,5 +171,4 @@ void loop()
   handleReset();
   handleClock();
   panelLeds.updateAll();
-  // serviceRunList();
 }
