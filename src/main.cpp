@@ -14,18 +14,8 @@
 // Ryan "Ratimus" Richardson
 // ------------------------------------------------------------------------
 #include <Arduino.h>
-#include <RatFuncs.h>
-#include <Wire.h>
-#include "hw_constants.h"
-#include "OutputDac.h"
-#include <bitHelpers.h>
-#include "TuringRegister.h"
-#include <OutputRegister.h>
-#include <ESP32AnalogRead.h>
-#include "ESP32_New_TimerInterrupt.h"
 #include "hwio.h"
 #include "setup.h"
-#include "leds.h"
 #include "toggle.h"
 #include "timers.h"
 
@@ -54,15 +44,7 @@ void handleMode()
       break;
 
     case command_enum::STEP:
-      if (cmd.val < 0)
-      {
-        alan.iterate(-1, true);
-      }
-      else
-      {
-        alan.iterate(1, true);
-      }
-      // This only happens in mode_type::PERFORMANCE_MODE, so no need to check
+      alan.iterate(cmd.val, true);
       panelLeds.updateAll();
       break;
 
@@ -75,14 +57,7 @@ void handleMode()
       break;
 
     case command_enum::LENGTH:
-      if (cmd.val < 0)
-      {
-        alan.lengthMINUS();
-      }
-      else
-      {
-        alan.lengthPLUS();
-      }
+      alan.changeLen(cmd.val);
       break;
 
     case command_enum::LEDS:

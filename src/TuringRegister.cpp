@@ -81,14 +81,14 @@ uint16_t TuringRegister::norm(uint16_t reg, uint8_t len) const
 
 void TuringRegister::iterate(int8_t steps, bool inPlace /*=false*/)
 {
-  int8_t next(0);
+  int8_t next       (0);
 
   // Shift LEFT on positive steps; RIGHT on negative steps
-  uint8_t leftAmt(0);
-  uint8_t rightAmt(0);
+  uint8_t leftAmt   (0);
+  uint8_t rightAmt  (0);
 
-  int8_t  readIdx(0);
-  uint8_t writeIdx(0);
+  int8_t  readIdx   (0);
+  uint8_t writeIdx  (0);
 
   // Handle pending reset (if applicable)
   if (resetPending_)
@@ -99,39 +99,38 @@ void TuringRegister::iterate(int8_t steps, bool inPlace /*=false*/)
   }
   else
   {
-    wasReset_ = false;
+    wasReset_     = false;
     if (steps > 0)
     {
-      steps = 1;
-      leftAmt   = 1;
-      rightAmt  = 15;
-      readIdx   = *pPatternLength - 1;
-      writeIdx  = 0;
+      steps       = 1;
+      leftAmt     = 1;
+      rightAmt    = 15;
+      readIdx     = *pPatternLength - 1;
+      writeIdx    = 0;
     }
     else
     {
-      steps = -1;
-      leftAmt   = 15;
-      rightAmt  = 1;
-      readIdx   = 8 - *pPatternLength;
+      steps       = -1;
+      leftAmt     = 15;
+      rightAmt    = 1;
+      readIdx     = 8 - *pPatternLength;
 
       if (readIdx < 0)
       {
         readIdx += 16;
       }
-      writeIdx = 7;
+      writeIdx    = 7;
     }
     next = offset_ + steps;
+    next %= *pPatternLength;
   }
-
-  next %= *pPatternLength;
 
   // Load new patterns on the downbeat
   if (newLoadPending_ && next == 0)
   {
     loadPattern();
-    offset_   = 0;
-    wasReset_ = true;
+    offset_       = 0;
+    wasReset_     = true;
   }
 
   if (!wasReset_)
@@ -175,34 +174,34 @@ void TuringRegister::iterate(int8_t steps, bool inPlace /*=false*/)
 void TuringRegister::setNextPattern(uint8_t loadSlot)
 {
   newLoadPending_ = true;
-  loadSlot %= NUM_PATTERNS;
-  nextPattern_ = loadSlot;
+  loadSlot       %= NUM_PATTERNS;
+  nextPattern_    = loadSlot;
 }
 
 
 void TuringRegister::returnToZero()
 {
-  uint8_t rightshift(0);
   uint8_t leftshift(0);
+  uint8_t rightshift(0);
   if (offset_ > 0)
   {
-    rightshift = offset_;
-    leftshift = (16 - offset_);
+    rightshift  = offset_;
+    leftshift   = (16 - offset_);
   }
   else if(offset_ < 0)
   {
-    leftshift = -offset_;
-    rightshift = (16 + offset_);
+    leftshift   = -offset_;
+    rightshift  = (16 + offset_);
   }
 
   if (leftshift == 16)
   {
-    leftshift = 0 ;
+    leftshift   = 0 ;
   }
 
   if (rightshift == 16)
   {
-    rightshift = 0;
+    rightshift  = 0;
   }
 
   workingRegister = (workingRegister >> rightshift) | \
@@ -227,30 +226,32 @@ void TuringRegister::reset()
 }
 
 
-void TuringRegister::lengthPLUS()
+void TuringRegister::changeLen(int8_t amt)
 {
-  if (stepCountIdx_ == NUM_STEP_LENGTHS - 1)
+  if (amt > 0)
   {
-    return;
+    if (stepCountIdx_ == NUM_STEP_LENGTHS - 1)
+    {
+      return;
+    }
+    ++stepCountIdx_;
   }
-  ++stepCountIdx_;
-  pPatternLength = &STEP_LENGTH_VALS[stepCountIdx_];
-}
-
-
-void TuringRegister::lengthMINUS()
-{
-  if (stepCountIdx_ == 0)
+  else
   {
-    return;
+    if (stepCountIdx_ == 0)
+    {
+      return;
+    }
+    --stepCountIdx_;
   }
-  --stepCountIdx_;
   pPatternLength = &STEP_LENGTH_VALS[stepCountIdx_];
   offset_       %= *pPatternLength;
 }
 
 
-void TuringRegister::writeToRegister(const uint16_t fillVal, const uint8_t bankNum)
+void TuringRegister::writeToRegister(
+  const uint16_t fillVal,
+  const uint8_t bankNum)
 {
   patternBank[bankNum] = fillVal;
 }
@@ -290,7 +291,9 @@ void TuringRegister::savePattern(uint8_t bankIdx)
 
   // Copy working register into selected bank
   bankIdx %= NUM_PATTERNS;
-  writeToRegister(norm(workingRegister, *pPatternLength), bankIdx);
+  writeToRegister(
+    norm(workingRegister, *pPatternLength),
+    bankIdx);
   lengthsBank[bankIdx] = *pPatternLength;
   workingRegister = workingRegCopy;
 
@@ -310,18 +313,17 @@ void TuringRegister::savePattern(uint8_t bankIdx)
 uint8_t TuringRegister::pulseIt()
 {
   // Bit 0 from shift register; Bit 1 is !Bit 0
-  uint8_t inputReg(static_cast<uint8_t>(workingRegister & 0xFF));
+  uint8_t inputReg  = static_cast<uint8_t>(workingRegister & 0xFF);
+  uint8_t outputReg = 0;
 
-  uint8_t outputReg(inputReg & BIT0);
-  outputReg |= (~outputReg << 1) & BIT1;
-
-  outputReg |= ((((inputReg & BIT0) >> 0) & ((inputReg & BIT3) >> 3)) << 2) & BIT2;
-  outputReg |= ((((inputReg & BIT2) >> 2) & ((inputReg & BIT7) >> 7)) << 3) & BIT3;
-
-  outputReg |= (((inputReg & BIT1) >> 1) ^ ((inputReg & BIT6) >> 6) << 4) & BIT4;
-  outputReg |= (((inputReg & BIT0) >> 0) ^ ((inputReg & BIT4) >> 4) << 5) & BIT5;
-  outputReg |= (((inputReg & BIT3) >> 3) ^ ((inputReg & BIT7) >> 7) << 6) & BIT6;
-  outputReg |= (((inputReg & BIT2) >> 2) ^ ((inputReg & BIT5) >> 5) << 7) & BIT7;
+  outputReg |= BIT0 & inputReg;
+  outputReg |= BIT1 & (~outputReg << 1);
+  outputReg |= BIT2 & (( ((inputReg & BIT0) >> 0) & ((inputReg & BIT3) >> 3)  ) << 2);
+  outputReg |= BIT3 & (( ((inputReg & BIT2) >> 2) & ((inputReg & BIT7) >> 7)  ) << 3);
+  outputReg |= BIT4 & (  ((inputReg & BIT1) >> 1) ^ ((inputReg & BIT6) >> 6) << 4   );
+  outputReg |= BIT5 & (  ((inputReg & BIT0) >> 0) ^ ((inputReg & BIT4) >> 4) << 5   );
+  outputReg |= BIT6 & (  ((inputReg & BIT3) >> 3) ^ ((inputReg & BIT7) >> 7) << 6   );
+  outputReg |= BIT7 & (  ((inputReg & BIT2) >> 2) ^ ((inputReg & BIT5) >> 5) << 7   );
 
   return outputReg;
 }

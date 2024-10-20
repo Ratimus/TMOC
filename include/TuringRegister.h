@@ -36,8 +36,7 @@ public:
   // Rotates the working register back to step 0
   void returnToZero();
   void reset();
-  void lengthPLUS();
-  void lengthMINUS();
+  void changeLen(int8_t amt);
 
   void setBit()                           { stoch_.bitSetPending_ = true;   stoch_.bitClearPending_ = false;}
   void clearBit()                         { stoch_.bitClearPending_ = true; stoch_.bitSetPending_ = false;  }
