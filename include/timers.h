@@ -9,6 +9,6 @@ uint8_t getFlashTimer();
 
 std::function<bool()> one_shot(
   long long period,
-  std::function<void()> callback = nullptr);
+  std::function<void()> callback);
 
 #endif

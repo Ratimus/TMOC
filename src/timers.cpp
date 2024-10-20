@@ -6,8 +6,6 @@
 #include <deque>
 #include <forward_list>
 
-// Semaphore for burning down list of callbacks from expired timers
-SemaphoreHandle_t xSemaphore = xSemaphoreCreateBinary();
 BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 
 // Volatile, 'cause we mess with these in ISRs
@@ -54,7 +52,7 @@ struct timed_callback
 
 
 std::forward_list<timed_callback> active_timers;
-std::deque<timed_callback> expired_timers;
+std::forward_list<timed_callback> expired_timers;
 
 void ICACHE_RAM_ATTR onTimer1();
 
@@ -116,17 +114,17 @@ void ICACHE_RAM_ATTR onTimer1()
   // Handle any timed_callbacks
   for (auto &timer: active_timers)
   {
-    if (--timer)
+    if (--timer && timer.func != nullptr)
     {
-      expired_timers.push_back(timer);
+      expired_timers.push_front(timer);
     }
   }
 
-  // Condition for forward_list<timed_callback>::remove_if
+  // Pull expired timers off the list
   active_timers.remove_if([] (const timed_callback& node) { return node.expired; });
 
   // Run List can't run until it gets this
-  xSemaphoreGiveFromISR(xSemaphore, &xHigherPriorityTaskWoken);
+  xSemaphoreGiveFromISR(callbacks_sem, &xHigherPriorityTaskWoken);
 }
 
 
@@ -150,30 +148,33 @@ std::function<bool()> one_shot(
     long long then = timestamp();
     bool expired(false);
 
-    if (func)
-    {
-      active_timers.push_front(timed_callback(period, func));
-    }
+    active_timers.push_front(timed_callback(period, func));
 
-    return [=]() mutable {
+    auto isExpired_lambda = [=]() mutable
+    {
         long long now = timestamp();
         return (now - then) >= period;
     };
+
+    return isExpired_lambda;
 }
 
 
-// If Timer1 ISR gives you a semaphore, run through the list of expired timed_callbacks
-// it created for you and call all their callback functions
+// Run through the list of expired timed_callbacks invoke their callback functions
+// NB: This is meant to be called from a FreeRTOS task!
 void serviceRunList()
 {
-  if (xSemaphoreTake(xSemaphore, 0) == pdFALSE)
-  {
-    return;
-  }
+    if (expired_timers.empty())
+    {
+      return;
+    }
 
-  for (auto timer: expired_timers)
-  {
-    timer.func();
-    expired_timers.pop_front();
-  }
+    // Timers are added with push_front - reverse the list so it's FIFO
+    expired_timers.reverse();
+    for (auto timer: expired_timers)
+    {
+      timer.func();
+    }
+
+    expired_timers.clear();
 }

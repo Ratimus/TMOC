@@ -24,9 +24,33 @@
 #define RESET_FLAG 1
 #define CLOCK_FLAG 0
 
+SemaphoreHandle_t callbacks_sem;
+TaskHandle_t callbacksTaskHandle(NULL);
+void IRAM_ATTR callbacksTask(void *param)
+{
+  callbacks_sem = xSemaphoreCreateBinary();
+
+  while (1)
+  {
+    xSemaphoreTake(callbacks_sem, portMAX_DELAY);
+    serviceRunList();
+  }
+}
+
+
 void setup()
 {
   setThingsUp();
+
+  xTaskCreate
+  (
+    callbacksTask,
+    "serviceRunList Task",
+    4096,
+    NULL,
+    10,
+    &callbacksTaskHandle
+  );
 }
 
 
@@ -176,5 +200,5 @@ void loop()
   handleReset();
   handleClock();
   panelLeds.updateAll();
-  serviceRunList();
+  // serviceRunList();
 }

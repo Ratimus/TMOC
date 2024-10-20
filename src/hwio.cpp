@@ -1,10 +1,8 @@
 #include "hwio.h"
-#include <Arduino.h>
 #include <MCP_ADC.h>
 #include <RatFuncs.h>
-#include <MagicButton.h>
 #include "timers.h"
-
+#include <memory>
 
 ////////////////////////////////////////////////////////////////
 //                      BUILT-IN IO
@@ -121,16 +119,16 @@ void expandVoltages(uint8_t shiftReg)
 ////////////////////////////////////////////////////////////////
 MCP3208 adc0 = MCP3208(SPI_DATA_OUT, SPI_DATA_IN, SPI_CLK);
 
-MultiModeCtrl * faderBank[8];
+std::array<std::shared_ptr<MultiModeCtrl>, 8> faderBank;
 
 LedController panelLeds;
 
 void initADC()
 {
   adc0.begin(ADC0_CS); // Chip select pin.
-  for (auto ch(0); ch < 8; ++ch)
+  for (auto ch(0); ch < NUM_FADERS; ++ch)
   {
-    faderBank[ch] = new MultiModeCtrl(8, &adc0, sliderMap[ch], 12);
+    faderBank[ch] = std::make_shared<MultiModeCtrl>(8, &adc0, sliderMap[ch], 12);
   }
   dbprintf("adc0 initialized, CS = pin %d\n", ADC0_CS);
 }
@@ -143,6 +141,5 @@ void setRange(uint8_t octaves)
   {
     faderBank[fader]->setRange(octaves);
   }
-  dbprintf("Range set to %u octaves\n", octaves);
 }
 

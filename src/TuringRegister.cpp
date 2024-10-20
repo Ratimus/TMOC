@@ -126,12 +126,13 @@ void TuringRegister::iterate(int8_t steps, bool inPlace /*=false*/)
   }
 
   // Load new patterns on the downbeat
-  if (newLoadPending_ && next == 0)
+  if (!inPlace && newLoadPending_ && next == 0)
   {
     loadPattern();
-    offset_       = 0;
     wasReset_     = true;
   }
+
+  offset_ = next;
 
   if (!wasReset_)
   {
@@ -140,12 +141,13 @@ void TuringRegister::iterate(int8_t steps, bool inPlace /*=false*/)
     bool writeVal(bitRead(workingRegister, readIdx));
     workingRegister = (workingRegister << leftAmt) | \
                       (workingRegister >> rightAmt);
-    writeVal = stoch_.stochasticize(writeVal);
+    if (!inPlace)
+    {
+      writeVal = stoch_.stochasticize(writeVal);
+    }
 
     bitWrite(workingRegister, writeIdx, writeVal);
   }
-
-  offset_ = next;
 
   if (newPatternLoaded_)
   {

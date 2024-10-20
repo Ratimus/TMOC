@@ -1,15 +1,13 @@
 #ifndef H_W_I_O_DOT_H
 #define H_W_I_O_DOT_H
-#include <Arduino.h>
-#include "hw_constants.h"
 #include <OutputRegister.h>
-#include "OutputDac.h"
 #include <ESP32AnalogRead.h>
 #include <MagicButton.h>
 #include <DacESP32.h>
 #include <GateIn.h>
 #include <SharedCtrl.h>
 #include "leds.h"
+#include "hw_constants.h"
 
 // Keep track of Clock and Reset digital inputs
 extern GateInArduino gates;
@@ -30,7 +28,7 @@ extern ESP32AnalogRead cvB;        // "NOISE" input
 extern ESP32AnalogRead turing;     // "LOOP" variable resistor
 
 // Virtual overlays for slide potentiometers
-extern MultiModeCtrl * faderBank[];
+extern std::array<std::shared_ptr<MultiModeCtrl>, NUM_FADERS> faderBank;
 
 // Control object for all our leds
 extern LedController panelLeds;
