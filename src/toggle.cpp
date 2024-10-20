@@ -15,23 +15,25 @@ toggle_cmd updateToggle()
     writeHigh.readAndFree()
   };
 
-  if (clickies[0] == ButtonState :: DoubleClicked)
+  if (clickies[0] == ButtonState::DoubleClicked)
   {
     return toggle_cmd::LESS_OCTAVES;
   }
 
-  if (clickies[1] == ButtonState :: DoubleClicked)
+  if (clickies[1] == ButtonState::DoubleClicked)
   {
     return toggle_cmd::MORE_OCTAVES;
   }
 
   // Single click to set/clear BIT0
-  if (clickies[0] == ButtonState :: Clicked || clickies[0] == ButtonState :: Held)
+  if (clickies[0] == ButtonState::Clicked
+   || clickies[0] == ButtonState::Held)
   {
     return toggle_cmd::CLEAR_BIT;
   }
 
-  if (clickies[1] == ButtonState :: Clicked || clickies[1] == ButtonState :: Held)
+  if (clickies[1] == ButtonState::Clicked
+   || clickies[1] == ButtonState::Held)
   {
     if (mode.performing())
     {

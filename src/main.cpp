@@ -21,9 +21,6 @@
 
 #define DEBUG_CLOCK
 
-#define RESET_FLAG 1
-#define CLOCK_FLAG 0
-
 void setup()
 {
   setThingsUp();
@@ -45,7 +42,6 @@ void handleMode()
 
     case command_enum::STEP:
       alan.iterate(cmd.val, true);
-      panelLeds.updateAll();
       break;
 
     case command_enum::LOAD:
@@ -127,7 +123,7 @@ void handleReset()
     return;
   }
 #else
-  if (!gates.readRiseFlag(RESET_FLAG))
+  if (!newReset())
   {
     return;
   }
@@ -152,11 +148,11 @@ void handleClock()
     floating_debug_flag = toggle_cmd::NO;
   }
 #else
-  if (gates.readRiseFlag(CLOCK_FLAG))
+  if (newClock())
   {
     alan.iterate((cvB.readRaw() > 2047) ? -1 : 1);
   }
-  else if (gates.readFallFlag(CLOCK_FLAG))
+  else if (clockDown())
   {
     triggers.allOff();
   }

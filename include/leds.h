@@ -10,15 +10,15 @@
 // performance mode) or status (in one of the editing modes)
 class LedController
 {
-  void updateFaderLeds();
-  void updateMainLeds();
+  void setFaderReg();
+  void setMainReg();
 
   long long resetBlankTime;
   // Hardware interfaces for 74HC595
   OutputRegister<uint16_t>  hw_reg;
+  bool enabled;
 
 public:
-  bool enabled;
   LedController();
   void updateAll();
   void blinkOut();

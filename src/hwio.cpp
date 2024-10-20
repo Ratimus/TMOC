@@ -4,14 +4,13 @@
 #include "timers.h"
 #include <memory>
 
-
 ////////////////////////////////////////////////////////////////
 //                      BUILT-IN IO
 ////////////////////////////////////////////////////////////////
 // Use the onboard ADCs for external control voltage & the main control
-ESP32AnalogRead cvA;        // "CV" input
-ESP32AnalogRead cvB;        // "NOISE" input
-ESP32AnalogRead turing;     // "LOOP" variable resistor
+ESP32AnalogRead cvA;    // "CV" input
+ESP32AnalogRead cvB;    // "NOISE" input
+ESP32AnalogRead turing; // "LOOP" variable resistor
 
 // Here's the ESP32 DAC output
 DacESP32 voltsExp(static_cast<gpio_num_t>(DAC1_CV_OUT));
@@ -22,7 +21,23 @@ DacESP32 voltsExp(static_cast<gpio_num_t>(DAC1_CV_OUT));
 // Keep track of Clock and Reset digital inputs
 GateInArduino gates(NUM_GATES_IN, GATE_PIN, true);
 
+#define RESET_FLAG 1
+bool newReset()
+{
+  return gates.readRiseFlag(RESET_FLAG);
+}
 
+
+#define CLOCK_FLAG 0
+bool newClock()
+{
+  return gates.readRiseFlag(CLOCK_FLAG);
+}
+
+bool clockDown()
+{
+  return gates.readFallFlag(CLOCK_FLAG);
+}
 ////////////////////////////////////////////////////////////////
 //               HARDWARE SHIFT REGISTER OUTPUTS
 ////////////////////////////////////////////////////////////////
@@ -33,8 +48,7 @@ void Triggers::reset()
   hw_reg.reset();
 }
 
-Triggers::Triggers():
-  hw_reg(OutputRegister<uint8_t> (SR_CLK, SR_DATA, TRIG_SR_CS, trgMap))
+Triggers::Triggers() : hw_reg(OutputRegister<uint8_t>(SR_CLK, SR_DATA, TRIG_SR_CS, trgMap))
 {
   ;
 }
@@ -46,13 +60,13 @@ void Triggers::setReg(uint8_t val)
   hw_reg.setReg(regVal);
 }
 
-
 void Triggers::clock()
 {
   setReg(alan.pulseIt());
   hw_reg.clock();
   // Turn the triggers off in {TODO: MAAGIC NUMBER} 10 ms
-  one_shot(10, [this](){ setReg(0); hw_reg.clock();});
+  one_shot(10, [this]()
+           { setReg(0); hw_reg.clock(); });
 }
 
 ////////////////////////////////////////////////////////////////
@@ -114,13 +128,11 @@ void expandVoltages(uint8_t shiftReg)
   voltsExp.outputVoltage(writeVal_8);
 }
 
-
 ////////////////////////////////////////////////////////////////
 //                       FADERS
 ////////////////////////////////////////////////////////////////
 
 LedController panelLeds;
-
 
 void serviceIO()
 {
@@ -131,3 +143,51 @@ void serviceIO()
   writeHigh.service();
 }
 
+// // TODO: decide what controls I want to use to activate this alternate mode
+// // Melodic algorithm inspired by Mystic Circuits' "Leaves" sequencer
+// void iThinkYouShouldLeaf(uint8_t shiftReg)
+// {
+//   uint16_t faderVals[8];
+//   uint16_t noteVals[4]{0, 0, 0, 0};
+
+//   uint8_t faderMasks[4];
+//   faderMasks[0] = shiftReg & 0b00001111;
+//   faderMasks[1] = shiftReg & 0b00111100;
+//   faderMasks[2] = shiftReg & 0b11110000;
+//   faderMasks[3] = shiftReg & 0b11000011;
+
+//   // This is the note we're going to write to the analog scale, invert,
+//   // and offset circuit
+//   uint16_t internalDacNote(0);
+
+//   // Figure out what we're going to set our 4 external DACs to
+//   for (uint8_t ch(0); ch < NUM_FADERS; ++ch)
+//   {
+//     faderVals[ch] = faderBank[ch]->read();
+//     dbprintf("Fader %u: %u\n", ch, faderVals[ch]);
+//     uint8_t channelMask(0x01 << ch);
+//     for (auto fd(0); fd < 4; ++fd)
+//     {
+//       if (faderMasks[fd] & channelMask)
+//       {
+//         noteVals[fd] += faderVals[ch];
+//       }
+//     }
+//     if (shiftReg & channelMask)
+//     {
+//       internalDacNote += faderVals[ch];
+//     }
+//   }
+
+//   for (auto ch(0); ch < 4; ++ch)
+//   {
+//     output.setChannelNote(ch, noteVals[ch]);
+//   }
+
+//   // Translate the note to a 12 bit DAC value, then convert that to an 8 bit value
+//   // since the internal DAC is only 8 bits
+//   // uint16_t writeVal_12(noteToDacVal(0, internalDacNote));
+//   // uint8_t writeVal_8(map(writeVal_12, 0, 4096, 0, 256));
+//   // voltsExp.outputVoltage(writeVal_8);
+//   // dbprintf("writeVal_8 : %u\n", writeVal_8);
+// }

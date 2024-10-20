@@ -32,8 +32,6 @@ TuringRegister alan(stoch);
 const uint8_t sliderMapping[]{7, 6, 5, 4, 3, 2, 1, 0};
 ControllerBank  faders(NUM_FADERS, NUM_BANKS, sliderMapping);
 
-bool    faderLocksChanged(1);
-
 
 void setThingsUp()
 {
@@ -63,10 +61,7 @@ void setThingsUp()
   triggers.reset();
 
   // Set up external 8 channel ADC
-  dbprintf("Here comes the ADCs\n");
-
   faders.init(SPI_DATA_OUT, SPI_DATA_IN, SPI_CLK, ADC0_CS);
-  dbprintf("Yup, there they are\n");
 
   // Set up DAC
   output.init();

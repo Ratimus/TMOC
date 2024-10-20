@@ -168,6 +168,7 @@ void TuringRegister::iterate(int8_t steps, bool inPlace /*=false*/)
     // Only do this when you get a clock after a reset
     panelLeds.blinkOut();
   }
+  panelLeds.updateAll();
 }
 
 
