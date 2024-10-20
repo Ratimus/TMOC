@@ -12,6 +12,8 @@
 #include <MagicButton.h>
 #include <vector>
 #include "stoch.h"
+#include "hw_constants.h"
+
 
 const uint8_t NUM_STEP_LENGTHS(13);
 const uint8_t STEP_LENGTH_VALS[NUM_STEP_LENGTHS]{2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 16};
@@ -63,7 +65,6 @@ public:
   uint8_t getDrunkenIndex();
 protected:
   void loadPattern();
-  void loadNewFaderBank();
 
   Stochasticizer        stoch_;
 
@@ -79,8 +80,9 @@ protected:
 
   const uint16_t*       pShiftReg;
   const uint8_t*        pPatternLength;
-  std::vector<uint8_t>  lengthsBank;
-  std::vector<uint16_t> patternBank;
+
+  std::array<uint8_t,  NUM_BANKS>  lengthsBank;
+  std::array<uint16_t, NUM_BANKS> patternBank;
 
   const uint8_t         NUM_PATTERNS;
   uint8_t               currentBankIdx_;

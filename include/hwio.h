@@ -8,6 +8,11 @@
 #include <SharedCtrl.h>
 #include "leds.h"
 #include "hw_constants.h"
+#include <memory>
+#include "OutputDac.h"
+
+
+extern ControllerBank faders;
 
 // Keep track of Clock and Reset digital inputs
 extern GateInArduino gates;
@@ -26,9 +31,6 @@ extern MagicButton writeLow;
 extern ESP32AnalogRead cvA;        // "CV" input
 extern ESP32AnalogRead cvB;        // "NOISE" input
 extern ESP32AnalogRead turing;     // "LOOP" variable resistor
-
-// Virtual overlays for slide potentiometers
-extern std::array<std::shared_ptr<MultiModeCtrl>, NUM_FADERS> faderBank;
 
 // Control object for all our leds
 extern LedController panelLeds;
@@ -52,9 +54,6 @@ extern Triggers triggers;
 // DAC 2: abs(DAC 1 - DAC 0)
 // DAC 3: DAC 0 if reg & BIT0 else no change from last value
 void expandVoltages(uint8_t shiftReg);
-
-void initADC();
-void setRange(uint8_t octaves);
 
 void serviceIO();
 // // TODO: decide what controls I want to use to activate this alternate mode

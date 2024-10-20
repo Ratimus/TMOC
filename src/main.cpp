@@ -81,7 +81,7 @@ void handleToggle()
       if (OctaveRange > 1)
       {
         --OctaveRange;
-        setRange(OctaveRange);
+        faders.setRange(OctaveRange);
       }
       break;
 
@@ -89,7 +89,7 @@ void handleToggle()
       if (OctaveRange < 3)
       {
         ++OctaveRange;
-        setRange(OctaveRange);
+        faders.(OctaveRange);
       }
       break;
 

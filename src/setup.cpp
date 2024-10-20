@@ -1,8 +1,17 @@
+#include <Arduino.h>
 #include "setup.h"
 #include "hwio.h"
 #include "timers.h"
+#include <Wire.h>
+#include "hw_constants.h"
+#include <GateIn.h>
+#include <RatFuncs.h>
+#include "OutputDac.h"
+#include <bitHelpers.h>
+#include <ClickEncoder.h>
+#include <OutputRegister.h>
+#include "ESP32_New_TimerInterrupt.h"
 
-float ONE_OVER_ADC_MAX(0.0);
 
 void setupESP32_ADCs()
 {
@@ -14,17 +23,17 @@ void setupESP32_ADCs()
 
 // Sequencer state variables
 uint8_t OctaveRange(1);
-int8_t patternPending(-1);    //
-
 ModeControl mode;
 
 // Core Shift Register functionality
 Stochasticizer stoch(turing, cvA);
 TuringRegister alan(stoch);
 
-// Don't light up "locked" faders regardless of bit vals
-uint8_t faderLockStateReg(0xFF);
+const uint8_t sliderMapping[]{7, 6, 5, 4, 3, 2, 1, 0};
+ControllerBank  faders(NUM_FADERS, NUM_BANKS, sliderMapping);
+
 bool    faderLocksChanged(1);
+
 
 void setThingsUp()
 {
@@ -54,28 +63,13 @@ void setThingsUp()
   triggers.reset();
 
   // Set up external 8 channel ADC
-  initADC();
-  ONE_OVER_ADC_MAX = 1.0f / faderBank[0]->getMax();
+  dbprintf("Here comes the ADCs\n");
+
+  faders.init(SPI_DATA_OUT, SPI_DATA_IN, SPI_CLK, ADC0_CS);
+  dbprintf("Yup, there they are\n");
 
   // Set up DAC
   output.init();
-
-  for (uint8_t fd = 0; fd < NUM_FADERS; ++fd)
-  {
-    // Don't light up locked faders
-    faderBank[fd]->setDefaults();
-    // bitWrite(faderLockStateReg, fd, faderBank[fd]->getLockState() == STATE_UNLOCKED);
-  }
-
-  uint16_t randomReg((random(1, 255) << 8) | random(1, 255));
-  for (int8_t bk(NUM_BANKS - 1); bk >= 0; --bk)
-  {
-    alan.writeToRegister(~(0x01 << bk), bk);
-    for (uint8_t fd = 0; fd < NUM_FADERS; ++fd)
-    {
-      faderBank[fd]->saveActiveCtrl(bk);
-    }
-  }
 
   setupTimers();
   alan.reset();

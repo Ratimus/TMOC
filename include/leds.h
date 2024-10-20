@@ -3,6 +3,8 @@
 #include <Arduino.h>
 #include "setup.h"
 #include <functional>
+#include "OutputRegister.h"
+
 
 // Updates main horizontal LED array to display current pattern (in
 // performance mode) or status (in one of the editing modes)
@@ -12,8 +14,6 @@ class LedController
   void updateMainLeds();
 
   long long resetBlankTime;
-  // Don't light up "locked" faders regardless of bit vals
-  uint8_t faderLockStateReg;
   // Hardware interfaces for 74HC595
   OutputRegister<uint16_t>  hw_reg;
 

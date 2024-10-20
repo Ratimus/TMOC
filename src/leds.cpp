@@ -8,7 +8,6 @@
 
 LedController::LedController():
   hw_reg(OutputRegister<uint16_t>  (SR_CLK, SR_DATA, LED_SR_CS, regMap)),
-  faderLockStateReg(0xFF),
   resetBlankTime(100),
   enabled(true)
 {;}
@@ -23,15 +22,7 @@ void LedController::blinkOut()
 
 void LedController::updateFaderLeds()
 {
-  // Check whether each individual fader is unlocked; don't light them up unless they are
-  for (auto fd(0); fd < NUM_FADERS; ++fd)
-  {
-    faderBank[fd]->read();
-    bitWrite(faderLockStateReg,
-             fd,
-             faderBank[fd]->getLockState() == LockState::STATE_UNLOCKED);
-  }
-  hw_reg.setReg(alan.getOutput() & faderLockStateReg, 0);
+  hw_reg.setReg(alan.getOutput() & faders.getLockByte(), 0);
 }
 
 

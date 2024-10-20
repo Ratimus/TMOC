@@ -32,13 +32,12 @@ TuringRegister::TuringRegister(Stochasticizer& stoch):
     wasReset_        (0),
     newPatternLoaded_(0)
 {
-  lengthsBank.reserve(NUM_PATTERNS);
-  patternBank.reserve(NUM_PATTERNS);
-
   for (uint8_t bk(0); bk < NUM_PATTERNS; ++bk)
   {
-    lengthsBank.push_back(STEP_LENGTH_VALS[stepCountIdx_]);
-    patternBank.push_back(rand());
+    lengthsBank[bk] = STEP_LENGTH_VALS[stepCountIdx_];
+
+    // patternBank[bk] = rand();
+    patternBank[bk] = ~(0x01 << bk);
   }
 
   pShiftReg = &patternBank[0];
@@ -151,7 +150,8 @@ void TuringRegister::iterate(int8_t steps, bool inPlace /*=false*/)
 
   if (newPatternLoaded_)
   {
-    loadNewFaderBank();
+    faders.selectBank(currentBankIdx_);
+    dbprintf("loading bank %u\n", currentBankIdx_);
   }
 
   if (inPlace)
@@ -272,17 +272,6 @@ void TuringRegister::loadPattern()
 }
 
 
-// Loads the pattern register, pattern length, and saved fader locations from the selected bank
-void TuringRegister::loadNewFaderBank()
-{
-  dbprintf("loading bank %u\n", currentBankIdx_);
-  for (uint8_t fd = 0; fd < NUM_FADERS; ++fd)
-  {
-    faderBank[fd]->selectActiveBank(currentBankIdx_);
-  }
-}
-
-
 void TuringRegister::savePattern(uint8_t bankIdx)
 {
   // Rotate working register to step 0
@@ -300,12 +289,7 @@ void TuringRegister::savePattern(uint8_t bankIdx)
   workingRegister = workingRegCopy;
 
   dbprintf("saved to slot %u\n", bankIdx);
-
-  // Saves the pattern register, pattern length, and current fader locations to the selected slot
-  for (uint8_t fd = 0; fd < NUM_FADERS; ++fd)
-  {
-    faderBank[fd]->saveActiveCtrl(bankIdx);
-  }
+  faders.saveBank(bankIdx);
 }
 
 // Make the trigger outputs do something interesting. Ideally, they'll all be related to

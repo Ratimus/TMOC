@@ -4,6 +4,7 @@
 #include "timers.h"
 #include <memory>
 
+
 ////////////////////////////////////////////////////////////////
 //                      BUILT-IN IO
 ////////////////////////////////////////////////////////////////
@@ -70,7 +71,7 @@ void expandVoltages(uint8_t shiftReg)
 
   for (uint8_t ch(0); ch < NUM_FADERS; ++ch)
   {
-    faderVals[ch] = faderBank[ch]->read();
+    faderVals[ch] = faders.read(ch);
 
     if (bitRead(shiftReg, ch))
     {
@@ -117,42 +118,15 @@ void expandVoltages(uint8_t shiftReg)
 ////////////////////////////////////////////////////////////////
 //                       FADERS
 ////////////////////////////////////////////////////////////////
-MCP3208 adc0 = MCP3208(SPI_DATA_OUT, SPI_DATA_IN, SPI_CLK);
-
-std::array<std::shared_ptr<MultiModeCtrl>, 8> faderBank;
 
 LedController panelLeds;
 
-void initADC()
-{
-  adc0.begin(ADC0_CS); // Chip select pin.
-  for (auto ch(0); ch < NUM_FADERS; ++ch)
-  {
-    faderBank[ch] = std::make_shared<MultiModeCtrl>(8, &adc0, sliderMap[ch], 12);
-  }
-  dbprintf("adc0 initialized, CS = pin %d\n", ADC0_CS);
-}
-
-
-// Sets upper and lower bounds for faders based on desired octave range
-void setRange(uint8_t octaves)
-{
-  for (auto fader(0); fader < NUM_FADERS; ++fader)
-  {
-    faderBank[fader]->setRange(octaves);
-  }
-}
 
 void serviceIO()
 {
-  // Handle all our hardware inputs
-  for (uint8_t fd = 0; fd < 8; ++fd)
-  {
-    faderBank[fd]->service();
-  }
-
   mode.service();
   gates.service();
+  faders.service();
   writeLow.service();
   writeHigh.service();
 }
