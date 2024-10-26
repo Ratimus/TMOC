@@ -9,18 +9,18 @@ const uint16_t uS_TO_mS(1000);
 const uint16_t ONE_KHZ_MICROS(uS_TO_mS); // 1000 uS for 1khz timer cycle for encoder
 
 // Volatile, 'cause we mess with these in ISRs
-volatile uint8_t flashTimer(0);
-volatile uint16_t millisTimer(0);
-volatile long long elapsed(0);
+volatile uint8_t   flashTimer  = 0;
+volatile uint16_t  millisTimer = 0;
+volatile long long elapsed     = 0;
 
 hw_timer_t *timer1(nullptr);   // Timer library takes care of telling this where to point
 
 void ICACHE_RAM_ATTR onTimer1();
 void serviceRunList();
 
-BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+BaseType_t        xHigherPriorityTaskWoken = pdFALSE;
+TaskHandle_t      callbacksTaskHandle(NULL);
 SemaphoreHandle_t callbacks_sem;
-TaskHandle_t callbacksTaskHandle(NULL);
 
 
 void IRAM_ATTR callbacksTask(void *param)

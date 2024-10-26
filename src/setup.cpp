@@ -18,7 +18,7 @@ void setupESP32_ADCs()
   // Set up internal ADCs
   cvA.attach(CV_IN_A);
   cvB.attach(CV_IN_B);
-  turing.attach(LOOP_CTRL);
+  cvLOOP.attach(LOOP_CTRL);
 }
 
 // Sequencer state variables
@@ -26,7 +26,7 @@ uint8_t OctaveRange(1);
 ModeControl mode;
 
 // Core Shift Register functionality
-Stochasticizer stoch(turing, cvA);
+Stochasticizer stoch(cvLOOP, cvA);
 TuringRegister alan(stoch);
 
 const uint8_t sliderMapping[]{7, 6, 5, 4, 3, 2, 1, 0};
@@ -64,7 +64,7 @@ void setThingsUp()
   faders.init(SPI_DATA_OUT, SPI_DATA_IN, SPI_CLK, ADC0_CS);
 
   // Set up DAC
-  output.init();
+  initOutputDac();
 
   setupTimers();
   alan.reset();

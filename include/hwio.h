@@ -14,20 +14,10 @@
 
 extern ControllerBank faders;
 
-// Abstraction for our 12-bit DAC channels
-extern MultiChannelDac output;
-
-// Here's the ESP32 DAC output
-extern DacESP32 voltsExp;
-
-// Bit 0 set/clear
-extern MagicButton writeHigh;
-extern MagicButton writeLow;
-
 // Use the onboard ADCs for external control voltage & the main control
 extern ESP32AnalogRead cvA;        // "CV" input
 extern ESP32AnalogRead cvB;        // "NOISE" input
-extern ESP32AnalogRead turing;     // "LOOP" variable resistor
+extern ESP32AnalogRead cvLOOP;     // "LOOP" variable resistor
 
 // Control object for all our leds
 extern LedController panelLeds;
@@ -36,6 +26,7 @@ class Triggers
 {
   uint8_t regVal;    // Gate/Trigger outputs + yellow LEDs
   OutputRegister<uint8_t> hw_reg;
+  uint8_t triggerLength;
 
 public:
   Triggers();
@@ -46,6 +37,7 @@ public:
 };
 
 extern Triggers triggers;
+
 // DAC 0: Faders & register
 // DAC 1: Faders & ~register
 // DAC 2: abs(DAC 1 - DAC 0)
@@ -55,6 +47,10 @@ bool newReset();
 bool newClock();
 bool clockDown();
 void serviceIO();
-
+void handleToggle();
+void handleReset();
+void handleClock();
+void handleMode();
+void initOutputDac();
 
 #endif

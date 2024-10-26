@@ -3,6 +3,10 @@
 
 #include <MagicButton.h>
 
+// Bit 0 set/clear
+extern MagicButton writeHigh;
+extern MagicButton writeLow;
+
 enum class toggle_cmd
 {
   LESS_OCTAVES,
