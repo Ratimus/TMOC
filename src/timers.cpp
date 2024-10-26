@@ -143,6 +143,7 @@ void ICACHE_RAM_ATTR onTimer1()
 
   // Run List can't run until it gets this
   xSemaphoreGiveFromISR(callbacks_sem, &xHigherPriorityTaskWoken);
+  portYIELD_FROM_ISR();
 }
 
 

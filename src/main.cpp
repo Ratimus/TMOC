@@ -19,7 +19,7 @@
 #include "toggle.h"
 #include "timers.h"
 
-#define DEBUG_CLOCK
+// #define DEBUG_CLOCK
 
 void setup()
 {
@@ -73,20 +73,12 @@ void handleToggle()
   toggle_cmd cmd(updateToggle());
   switch(cmd)
   {
-    case toggle_cmd::MORE_OCTAVES:
-      if (OctaveRange > 1)
-      {
-        --OctaveRange;
-        faders.setRange(OctaveRange);
-      }
+    case toggle_cmd::LESS_OCTAVES:
+      faders.lessRange();
       break;
 
-    case toggle_cmd::LESS_OCTAVES:
-      if (OctaveRange < 3)
-      {
-        ++OctaveRange;
-        faders.(OctaveRange);
-      }
+    case toggle_cmd::MORE_OCTAVES:
+      faders.moreRange();
       break;
 
     case toggle_cmd::CLEAR_BIT:
@@ -152,10 +144,10 @@ void handleClock()
   {
     alan.iterate((cvB.readRaw() > 2047) ? -1 : 1);
   }
-  else if (clockDown())
-  {
-    triggers.allOff();
-  }
+  // else if (clockDown())
+  // {
+  //   triggers.allOff();
+  // }
 #endif
 }
 

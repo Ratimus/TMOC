@@ -300,17 +300,18 @@ void TuringRegister::savePattern(uint8_t bankIdx)
 uint8_t TuringRegister::pulseIt()
 {
   // Bit 0 from shift register; Bit 1 is !Bit 0
-  uint8_t inputReg  = static_cast<uint8_t>(workingRegister & 0xFF);
-  uint8_t outputReg = 0;
+  uint8_t inputReg(static_cast<uint8_t>(workingRegister & 0xFF));
 
-  outputReg |= BIT0 & inputReg;
-  outputReg |= BIT1 & (~outputReg << 1);
-  outputReg |= BIT2 & (( ((inputReg & BIT0) >> 0) & ((inputReg & BIT3) >> 3)  ) << 2);
-  outputReg |= BIT3 & (( ((inputReg & BIT2) >> 2) & ((inputReg & BIT7) >> 7)  ) << 3);
-  outputReg |= BIT4 & (  ((inputReg & BIT1) >> 1) ^ ((inputReg & BIT6) >> 6) << 4   );
-  outputReg |= BIT5 & (  ((inputReg & BIT0) >> 0) ^ ((inputReg & BIT4) >> 4) << 5   );
-  outputReg |= BIT6 & (  ((inputReg & BIT3) >> 3) ^ ((inputReg & BIT7) >> 7) << 6   );
-  outputReg |= BIT7 & (  ((inputReg & BIT2) >> 2) ^ ((inputReg & BIT5) >> 5) << 7   );
+  uint8_t outputReg(inputReg & BIT0);
+  outputReg |= (~outputReg << 1) & BIT1;
+
+  outputReg |= ((((inputReg & BIT0) >> 0) & ((inputReg & BIT3) >> 3)) << 2) & BIT2;
+  outputReg |= ((((inputReg & BIT2) >> 2) & ((inputReg & BIT7) >> 7)) << 3) & BIT3;
+
+  outputReg |= (((inputReg & BIT1) >> 1) ^ ((inputReg & BIT6) >> 6) << 4) & BIT4;
+  outputReg |= (((inputReg & BIT0) >> 0) ^ ((inputReg & BIT4) >> 4) << 5) & BIT5;
+  outputReg |= (((inputReg & BIT3) >> 3) ^ ((inputReg & BIT7) >> 7) << 6) & BIT6;
+  outputReg |= (((inputReg & BIT2) >> 2) ^ ((inputReg & BIT5) >> 5) << 7) & BIT7;
 
   return outputReg;
 }

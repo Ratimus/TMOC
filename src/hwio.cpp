@@ -191,3 +191,83 @@ void serviceIO()
 //   // voltsExp.outputVoltage(writeVal_8);
 //   // dbprintf("writeVal_8 : %u\n", writeVal_8);
 // }
+
+
+//=====================================================================================
+// TODO: CALIBRATION STUFF
+  // SET LED MAPPING:
+  // write a 1 to bit 7
+  // move encoder until bit 0 is lit
+  // click to move on
+  // bit 0 stays lit, bit 7 is lit
+  // move encoder until bit 1 is lit
+  // etc.
+  // . . . do this for all three LED registers
+
+  // SET DAC OUTPUT CHANNEL MAPPING:
+  // for output in UserOutputs:
+  //   outCh = 0;
+  //   Plug something in to output
+  //   Click the encoder until the pitch goes up
+  //
+  //   if encoder right
+  //     ++outCh;
+  //   else if encoder left
+  //     -- outCh;
+  //
+  //   if write
+  //     DAC_CH[output] = outCh;
+
+  // SET FADER MAPPING
+  // set all faders to zero
+  // move fader 0 to max until it lights up,
+  // move fader 1 to max,
+  // etc.
+
+// // Allows you to fine-tune the output of each individual DAC channel using all eight faders.
+// // Save the values you get and use them to populate the calibration data in TMOC_HW.h
+// void calibrate()
+// {
+//   uint8_t selch(0);
+//   uint8_t selreg(1);
+//   leds.tempWrite(1, 0);
+//   leds.tempWrite(1, 1);
+
+//   uint16_t outval(0);
+//   faderBank[selch]->selectActiveBank(0);
+//   dbprintf("ch: %u\n", selch);
+//   while (true)
+//   {
+//     if (writeHigh.readAndFree())
+//     {
+//       writeRawValToDac(selch, 0);
+//       ++selch;
+
+//       if (selch == 4)
+//       {
+//         selch = 0;
+//       }
+
+//       selreg = 0 | (1 << selch);
+//       faderBank[selch]->selectActiveBank(0);
+//       leds.tempWrite(selreg, 0);
+//       leds.tempWrite(selreg, 1);
+//       dbprintf("ch: %u\n", selch);
+//     }
+
+//     outval = 0;
+//     for (uint8_t bn(0); bn < 8; ++bn)
+//     {
+//       outval += faderBank[sliderMap[bn]]->read() >> (1 + bn);
+//     }
+//     if (outval > 4095)
+//     {
+//       outval = 4095;
+//     }
+//     output.setChannelVal(selch, outval);
+//     if (writeLow.readAndFree())
+//     {
+//       dbprintf("%u\n", outval);
+//     }
+//   }
+// }

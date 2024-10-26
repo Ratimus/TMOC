@@ -5,7 +5,10 @@
 
 
 LedController::LedController():
-  hw_reg(OutputRegister<uint16_t>  (SR_CLK, SR_DATA, LED_SR_CS, regMap)),
+  hw_reg(OutputRegister<uint16_t> (SR_CLK,
+                                   SR_DATA,
+                                   LED_SR_CS,
+                                   regMap)),
   resetBlankTime(100),
   enabled(true)
 {;}
@@ -14,7 +17,8 @@ LedController::LedController():
 void LedController::blinkOut()
 {
   enabled = false;
-  one_shot(resetBlankTime, [this](){enabled = true;});
+  one_shot(resetBlankTime,
+           [this](){enabled = true;});
 }
 
 
@@ -29,8 +33,9 @@ void LedController::setFaderReg()
 void LedController::setMainReg()
 {
   // Fast blink = LOAD, slower blink = SAVE
-  uint8_t flashTimer(getFlashTimer());
-  int8_t slot(mode.activeSlot());
+  int8_t  slot       = mode.activeSlot();
+  uint8_t len        = alan.getLength();
+  uint8_t flashTimer = getFlashTimer();
 
   switch(mode.currentMode())
   {
@@ -42,7 +47,6 @@ void LedController::setMainReg()
     case mode_type::CHANGE_LENGTH_MODE:
       // Light up the LED corresponding to pattern length. For length > 8,
       // light up all LEDs and dim the active one
-      uint8_t len(alan.getLength());
       if (len <= 8)
       {
         hw_reg.setReg(0x01 << (len - 1), 1);

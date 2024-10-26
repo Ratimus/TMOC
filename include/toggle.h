@@ -5,8 +5,8 @@
 
 enum class toggle_cmd
 {
-  MORE_OCTAVES,
   LESS_OCTAVES,
+  MORE_OCTAVES,
   CLEAR_BIT,
   SET_BIT,
   EXIT,

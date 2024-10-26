@@ -7,9 +7,6 @@
 
 extern ModeControl mode;
 
-// Sequencer state variables
-extern uint8_t OctaveRange;
-
 // Core Shift Register functionality
 extern TuringRegister alan;
 
