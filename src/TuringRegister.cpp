@@ -99,13 +99,13 @@ uint16_t TransportParams::iterate(uint16_t reg, Stochasticizer stoch)
   {
     // Update register
     newPatternLoaded_ = false;
-    bool writeVal(bitRead(reg, shifter_.readIdx));
-    ret   =  (ret << shifter_.leftAmt) | \
-             (ret >> shifter_.rightAmt);
-    if (!shifter_.immutable)
+    bool writeVal(bitRead(reg, shifter_.readIdx()));
+    ret = (ret << shifter_.leftAmt()) | \
+          (ret >> shifter_.rightAmt());
+    if (!shifter_.immutable())
     {
       writeVal = stoch.stochasticize(writeVal);
-      bitWrite(ret, shifter_.writeIdx, writeVal);
+      bitWrite(ret, shifter_.writeIdx(), writeVal);
     }
   }
   return ret;
@@ -114,12 +114,7 @@ uint16_t TransportParams::iterate(uint16_t reg, Stochasticizer stoch)
 
 uint16_t TransportParams::loadPattern(const std::array<uint16_t, 8> &bank)
 {
-  if (!load)
-  {
-    return bank[currentBankIdx_];
-  }
-
-  load = false;
+  readyToLoad_ = false;
   // Move pattern pointer to selected bank and copy its contents into working register
   currentBankIdx_   = nextPattern_;
   offset_          %= *workingLength;
@@ -134,13 +129,17 @@ uint16_t TransportParams::loadPattern(const std::array<uint16_t, 8> &bank)
 void TuringRegister::iterate(int8_t steps, bool inPlace /*=false*/)
 {
   transport_.pre_iterate(steps, inPlace);
-  workingRegister = transport_.loadPattern(registersBank);
+  if (transport_.readyToLoad())
+  {
+    workingRegister = transport_.loadPattern(registersBank);
+  }
+
   workingRegister = transport_.iterate(workingRegister, stoch_);
 
-  if (transport_.newPatternLoaded_)
+  if (transport_.newPatternLoaded())
   {
-    faders.selectBank(transport_.currentBankIdx_);
-    dbprintf("loaded fader bank %u\n", transport_.currentBankIdx_);
+    faders.selectBank(transport_.currentBankIdx());
+    dbprintf("loaded fader bank %u\n", transport_.currentBankIdx());
   }
 
   if (inPlace)
@@ -151,7 +150,7 @@ void TuringRegister::iterate(int8_t steps, bool inPlace /*=false*/)
   // Update all the various outputs
   expandVoltages(getOutput());
   triggers.clock();
-  panelLeds.clock(transport_.wasReset_);
+  panelLeds.clock(transport_.wasReset());
 }
 
 
@@ -159,7 +158,7 @@ void TuringRegister::iterate(int8_t steps, bool inPlace /*=false*/)
 // slot, it will reload it, effectively undoing any changes
 void TuringRegister::setNextPattern(uint8_t loadSlot)
 {
-  loadSlot       %= NUM_PATTERNS;
+  loadSlot %= NUM_PATTERNS;
   transport_.setNextPattern(loadSlot);
 }
 
@@ -172,18 +171,18 @@ void TuringRegister::rotateToZero()
 
 void TuringRegister::reset()
 {
-  if (transport_.newLoadPending_)
+  if (transport_.newLoadPending())
   {
     workingRegister = transport_.loadPattern(registersBank);
-    transport_.offset_ = 0;
+    transport_.reAnchor();
   }
 
-  if (transport_.resetPending_)
+  if (transport_.resetPending())
   {
     return;
   }
   rotateToZero();
-  transport_.resetPending_ = true;
+  transport_.flagForReset();
 }
 
 
@@ -203,7 +202,10 @@ void TuringRegister::changeLen(int8_t amt)
     transport_.lengthMINUS();
   }
 
-  dbprintf("Bank %u: length = %u; step = %u\n", transport_.currentBankIdx_, *transport_.workingLength, transport_.offset_);
+  dbprintf("Bank %u: length = %u; step = %u\n",
+            transport_.currentBankIdx_,
+           *transport_.workingLength,
+            transport_.offset_);
 }
 
 
@@ -211,10 +213,10 @@ void TuringRegister::savePattern(uint8_t bankIdx)
 {
   // Copy working register into selected bank
   bankIdx %= NUM_PATTERNS;
-  uint16_t workingRegCopy(workingRegister);
+  uint16_t workingRegCopy = workingRegister;
   rotateToZero();
-  registersBank[bankIdx] = workingRegister;
-  workingRegister        = workingRegCopy;
+  registersBank[bankIdx]  = workingRegister;
+  workingRegister         = workingRegCopy;
 
   dbprintf("saved to slot %u\n", bankIdx);
   faders.saveBank(bankIdx);

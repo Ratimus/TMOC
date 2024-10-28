@@ -5,11 +5,10 @@
 std::array<const uint8_t, NUM_STEP_LENGTHS> STEP_LENGTH_VALS {2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 16};
 
 TransportParams::TransportParams():
-  load             (0),
+  readyToLoad_            (0),
   offset_          (0),
   wasReset_        (0),
   drunkStep_       (0),
-  inReverse_       (0),
   resetPending_    (0),
   currentBankIdx_  (0),
   newLoadPending_  (0),
@@ -20,6 +19,13 @@ TransportParams::TransportParams():
 {;}
 
 
+void TransportParams::reset()
+{
+  offset_       = 0;
+  wasReset_     = true;
+  resetPending_ = false;
+}
+
 
 void TransportParams::lengthMINUS()
 {
@@ -27,6 +33,7 @@ void TransportParams::lengthMINUS()
   {
     return;
   }
+
   --workingLength;
   offset_ %= *workingLength;
 }
@@ -38,6 +45,7 @@ void TransportParams::lengthPLUS()
   {
     return;
   }
+
   ++workingLength;
 }
 
@@ -48,7 +56,13 @@ void TransportParams::reAnchor()
 }
 
 
-bool TransportParams::wasNewPatternLoaded() const
+bool TransportParams::newLoadPending() const
+{
+  return newLoadPending_;
+}
+
+
+bool TransportParams::newPatternLoaded() const
 {
   return newPatternLoaded_;
 }
@@ -57,6 +71,18 @@ bool TransportParams::wasNewPatternLoaded() const
 bool TransportParams::wasReset() const
 {
   return wasReset_;
+}
+
+
+bool TransportParams::resetPending() const
+{
+  return resetPending_;
+}
+
+
+void TransportParams::flagForReset()
+{
+  resetPending_ = true;
 }
 
 
@@ -78,31 +104,46 @@ uint8_t TransportParams::getSlot() const
 }
 
 
-void TransportParams::setNextPattern(uint8_t slot)
+bool TransportParams::readyToLoad() const
+{
+  return readyToLoad_;
+}
+
+
+uint8_t TransportParams::currentBankIdx() const
+{
+  return currentBankIdx_;
+}
+
+
+void TransportParams::setNextPattern(const uint8_t slot)
 {
   newLoadPending_ = true;
   nextPattern_    = slot;
 }
 
 
-void TransportParams::pre_iterate(int8_t steps, bool inPlace)
+void TransportParams::pre_iterate(const int8_t steps, const bool inPlace)
 {
-  load = false;
+  readyToLoad_ = false;
+  wasReset_    = false;
+
   if (!inPlace)
   {
     // Load new patterns on the downbeat
-    if (newLoadPending_ && shifter_.next == 0)
+    if (newLoadPending_ && shifter_.next() == 0)
     {
-      load      = true;
-      wasReset_ = true;
+      wasReset_     = true;
+      readyToLoad_  = true;
     }
-    offset_     = shifter_.next;
   }
-  shifter_.getShiftParams(this, steps, inPlace);
+
+  shifter_.getShiftParams(*this, steps, inPlace);
+  offset_ = shifter_.next();
 }
 
 
 uint16_t TransportParams::rotateToZero(const uint16_t reg)
 {
-  return shifter_.rotateToZero(reg, this);
+  return shifter_.rotateToZero(reg, offset_);
 }

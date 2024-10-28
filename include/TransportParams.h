@@ -6,43 +6,51 @@
 
 const uint8_t NUM_STEP_LENGTHS(13);
 
-struct TransportParams
+class TransportParams
 {
-  TransportParams();
-  ~TransportParams() = default;
-
   bool        wasReset_;
-  bool        inReverse_;
-  bool        anchorBit0_;
+  bool        readyToLoad_;
   bool        resetPending_;
   bool        newLoadPending_;
   bool        newPatternLoaded_;
-  bool        load;
 
   ShiftParams shifter_;
 
   int8_t      offset_;
-  int8_t      drunkStep_;
   uint8_t     nextPattern_;
   uint8_t     currentBankIdx_;
 
   std::array<const uint8_t, NUM_STEP_LENGTHS>::iterator workingLength;
 
-  bool        wasNewPatternLoaded() const;
+public:
+
+  TransportParams();
+  ~TransportParams() = default;
+
   bool        wasReset() const;
+  bool        readyToLoad() const;
+  bool        resetPending() const;
+  bool        newLoadPending() const;
+  bool        newPatternLoaded() const;
+
   int8_t      getStep() const;
   uint8_t     getSlot() const;
   uint8_t     getLength() const;
+  uint8_t     currentBankIdx() const;
 
+  void        reset();
   void        reAnchor();
   void        lengthPLUS();
   void        lengthMINUS();
-  void        setNextPattern(uint8_t slot);
+  void        flagForReset();
+  void        setNextPattern(const uint8_t slot);
 
-  void        pre_iterate(int8_t steps, bool inPlace);
+  void        pre_iterate(const int8_t steps, const bool inPlace);
   uint16_t    loadPattern(const std::array<uint16_t, 8> &bank);
   uint16_t    iterate(uint16_t reg, Stochasticizer stoch);
   uint16_t    rotateToZero(const uint16_t reg);
+
+  int8_t      drunkStep_;
 };
 
 #endif
