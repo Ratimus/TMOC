@@ -11,7 +11,7 @@
 #include <ClickEncoder.h>
 #include <OutputRegister.h>
 #include "ESP32_New_TimerInterrupt.h"
-
+#include "stoch.h"
 
 void setupESP32_ADCs()
 {

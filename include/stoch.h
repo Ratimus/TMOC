@@ -1,3 +1,7 @@
+#ifndef STOCH_DOT_H
+#define STOCH_DOT_H
+
+#include <Arduino.h>
 #include <ESP32AnalogRead.h>
 
 struct Stochasticizer
@@ -18,3 +22,4 @@ struct Stochasticizer
   bool stochasticize(const bool startVal) const;
 };
 
+#endif

@@ -1,8 +1,9 @@
 #include "stoch.h"
 #include <RatFuncs.h>
-Stochasticizer::Stochasticizer(
-  ESP32AnalogRead& extLoop,
-  ESP32AnalogRead& extCv):
+
+
+Stochasticizer::Stochasticizer(ESP32AnalogRead& extLoop,
+                               ESP32AnalogRead& extCv):
     bitSetPending_(0),
     bitClearPending_(0),
     THRESH_LOW(265.0),

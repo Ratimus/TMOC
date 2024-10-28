@@ -22,6 +22,7 @@ public:
   LedController();
   void updateAll();
   void blinkOut();
+  void clock(bool reset = false);
 
   // TODO...
   void setMain_1(uint8_t bit, bool on = true);

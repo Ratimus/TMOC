@@ -87,6 +87,17 @@ void LedController::setMainReg()
 }
 
 
+void LedController::clock(bool reset)
+{
+  if (reset)
+  {
+    // Only do this when you get a clock after a reset
+    panelLeds.blinkOut();
+  }
+  panelLeds.updateAll();
+}
+
+
 void LedController::updateAll()
 {
   if (!enabled)
